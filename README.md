@@ -60,6 +60,12 @@ Escrow is Stripe Connect in test mode. Nothing is charged until `STRIPE_SECRET_K
 
 A full test-mode charge was not run here because no Stripe secret key was provided.
 
+## Google sign-in
+
+`/login` and `/signup` keep email and password, and add Continue with Google. The button calls `signInWithOAuth({ provider: "google" })`. Supabase returns to `/auth/callback`, which exchanges the code for a session. Email confirmation is unchanged.
+
+Google Cloud and the Supabase Google provider still need a real client id and secret before a click can finish. No credentials are stored in this repo.
+
 ## Email confirmation
 
 Signup requires email confirmation (`mailer_autoconfirm` is false). A signup attempt from this environment returned `email rate limit exceeded`, so the confirm-then-login walkthrough could not be finished. Confirmation was left on. Email templates were not restyled; this environment has no Supabase Management API token.

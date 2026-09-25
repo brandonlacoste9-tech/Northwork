@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { GoogleSignInButton } from "@/components/google-sign-in-button";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -22,6 +23,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const googleError =
+    searchParams.get("error") === "google"
+      ? "Google sign-in did not finish. Try again, or use your email and password."
+      : null;
 
   if (!isSupabaseConfigured()) {
     return (
@@ -70,7 +76,18 @@ export default function LoginPage() {
             Sign in to post projects, pitch on work, and manage your profile.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="grid gap-4">
+          <GoogleSignInButton />
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            or
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          {googleError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {googleError}
+            </p>
+          ) : null}
           <form onSubmit={onSubmit} className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>

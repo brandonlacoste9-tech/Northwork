@@ -60,7 +60,6 @@ export function JobDetail({
       <header className="mt-6">
         <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>{job.client}</span>
-          {job.clientSample ? <TrustBadge kind="sample" /> : null}
           {job.clientVerified ? <TrustBadge kind="verified" /> : null}
         </p>
         <h1 className="mt-2 font-heading text-3xl tracking-tight sm:text-4xl">{job.title}</h1>
@@ -101,7 +100,6 @@ export function JobDetail({
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center gap-2 text-lg">
             About the client
-            {job.clientSample ? <TrustBadge kind="sample" /> : null}
             {job.clientVerified ? <TrustBadge kind="verified" /> : null}
           </CardTitle>
           <CardDescription>{job.client}</CardDescription>

@@ -63,7 +63,6 @@ export function FreelancerProfile({
               {person.city}, {person.province}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              {person.sample ? <TrustBadge kind="sample" /> : null}
               {person.verified ? <TrustBadge kind="verified" /> : null}
               <Badge variant="outline">{person.availability}</Badge>
               {person.completedCount ? (

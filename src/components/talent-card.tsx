@@ -24,7 +24,6 @@ export function TalentCard({ person }: { person: Freelancer }) {
             <div className="min-w-0">
               <CardTitle>{person.name}</CardTitle>
               <CardDescription>{person.role}</CardDescription>
-              {person.sample ? <TrustBadge kind="sample" className="mt-1" /> : null}
             </div>
           </div>
         </CardHeader>

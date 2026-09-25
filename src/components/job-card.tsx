@@ -31,7 +31,6 @@ export function JobCard({ job }: { job: Job }) {
             <Badge variant="secondary">{budgetType === "hourly" ? "Hourly" : "Fixed"}</Badge>
             <CardDescription className="flex flex-wrap items-center gap-1.5">
               <span>{job.client}</span>
-              {job.clientSample ? <TrustBadge kind="sample" /> : null}
               {job.clientVerified ? <TrustBadge kind="verified" /> : null}
             </CardDescription>
           </div>

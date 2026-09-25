@@ -67,12 +67,41 @@ alter table public.jobs add column if not exists location text;
 
 alter table public.jobs enable row level security;
 
--- Open jobs are visible to everyone (job board). Clients can also see their
--- own non-open jobs.
+-- Hired freelancers need to read in-progress and closed jobs (hire state, reviews).
+-- Security definer avoids RLS recursion between jobs and proposals.
+create schema if not exists private;
+
+create or replace function private.viewer_accepted_on_job(target_job uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.proposals p
+    where p.job_id = target_job
+      and p.freelancer_id = (select auth.uid())
+      and p.status = 'accepted'
+  );
+$$;
+
+revoke all on function private.viewer_accepted_on_job(uuid) from public;
+grant usage on schema private to anon, authenticated;
+grant execute on function private.viewer_accepted_on_job(uuid) to anon, authenticated;
+
+-- Open jobs are visible to everyone (job board). Clients see their own jobs.
+-- The accepted freelancer can read the job after it leaves the open board.
 drop policy if exists "jobs: public read open + own" on public.jobs;
 create policy "jobs: public read open + own"
   on public.jobs for select
-  using (status = 'open' or auth.uid() = client_id);
+  to anon, authenticated
+  using (
+    status = 'open'
+    or client_id = (select auth.uid())
+    or private.viewer_accepted_on_job(id)
+  );
 
 -- Logged-in users can post jobs; the row must belong to them.
 drop policy if exists "jobs: insert own" on public.jobs;
@@ -286,3 +315,63 @@ begin
     alter publication supabase_realtime add table public.messages;
   end if;
 end $$;
+
+-- ---------------------------------------------------------------- reviews
+create table if not exists public.reviews (
+  id uuid primary key default gen_random_uuid(),
+  job_id uuid not null references public.jobs (id) on delete cascade,
+  reviewer_id uuid not null references public.profiles (id) on delete cascade,
+  reviewee_id uuid not null references public.profiles (id) on delete cascade,
+  rating integer not null check (rating between 1 and 5),
+  comment text,
+  created_at timestamptz not null default now(),
+  unique (job_id, reviewer_id)
+);
+
+alter table public.reviews enable row level security;
+
+drop policy if exists "reviews: public read" on public.reviews;
+create policy "reviews: public read"
+  on public.reviews for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "reviews: party insert on closed job" on public.reviews;
+create policy "reviews: party insert on closed job"
+  on public.reviews for insert
+  to authenticated
+  with check (
+    reviewer_id = (select auth.uid())
+    and exists (
+      select 1 from public.jobs j
+      where j.id = job_id
+        and j.status = 'closed'
+        and (
+          (
+            j.client_id = (select auth.uid())
+            and exists (
+              select 1 from public.proposals p
+              where p.job_id = j.id
+                and p.freelancer_id = reviewee_id
+                and p.status = 'accepted'
+            )
+          )
+          or (
+            reviewee_id = j.client_id
+            and exists (
+              select 1 from public.proposals p
+              where p.job_id = j.id
+                and p.freelancer_id = (select auth.uid())
+                and p.status = 'accepted'
+            )
+          )
+        )
+    )
+  );
+
+create index if not exists reviews_job_idx on public.reviews (job_id);
+create index if not exists reviews_reviewer_idx on public.reviews (reviewer_id);
+create index if not exists reviews_reviewee_idx on public.reviews (reviewee_id);
+
+grant select on table public.reviews to anon, authenticated;
+grant insert on table public.reviews to authenticated;

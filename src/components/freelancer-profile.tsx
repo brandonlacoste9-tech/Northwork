@@ -12,8 +12,23 @@ import {
 } from "@/components/ui/card";
 import type { Freelancer } from "@/lib/data";
 import { formatHourly } from "@/lib/format";
+import { StarRow } from "@/components/review-form";
 
-export function FreelancerProfile({ person }: { person: Freelancer }) {
+export type ProfileReview = {
+  id: string;
+  reviewerName: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+};
+
+export function FreelancerProfile({
+  person,
+  reviews,
+}: {
+  person: Freelancer;
+  reviews?: ProfileReview[];
+}) {
   return (
     <article className="mx-auto max-w-3xl px-4 py-10">
       <Link
@@ -74,6 +89,49 @@ export function FreelancerProfile({ person }: { person: Freelancer }) {
               </Card>
             ))}
           </div>
+        </section>
+      ) : null}
+      {reviews ? (
+        <section className="mt-10">
+          <h2 className="font-heading text-2xl">Reviews</h2>
+          {reviews.length === 0 ? (
+            <p className="mt-3 text-muted-foreground">No reviews yet.</p>
+          ) : (
+            <>
+              <p className="mt-3 text-sm text-muted-foreground">
+                {(
+                  reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
+                ).toFixed(1)}{" "}
+                · {reviews.length} review{reviews.length === 1 ? "" : "s"}
+              </p>
+              <ul className="mt-4 grid gap-3">
+                {reviews.map((review) => (
+                  <li key={review.id}>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                          {review.reviewerName}
+                          <StarRow rating={review.rating} />
+                        </CardTitle>
+                        <CardDescription>
+                          {new Date(review.createdAt).toLocaleDateString("en-CA", {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </CardDescription>
+                      </CardHeader>
+                      {review.comment ? (
+                        <CardContent className="pt-0 text-sm leading-6">
+                          {review.comment}
+                        </CardContent>
+                      ) : null}
+                    </Card>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
       ) : null}
     </article>

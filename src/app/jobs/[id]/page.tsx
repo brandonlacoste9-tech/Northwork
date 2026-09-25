@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { JobDetail } from "@/components/job-detail";
+import { ReviewForm } from "@/components/review-form";
 import {
   ProposalForm,
   ProposalList,
@@ -130,10 +131,38 @@ export default async function JobPage({ params }: PageProps) {
     proposalSlot = <ProposalSignIn />;
   }
 
+  let reviewSlot: ReactNode = null;
+  if (user && jobRow.status === "closed") {
+    const { data: accepted } = await supabase
+      .from("proposals")
+      .select("freelancer_id")
+      .eq("job_id", id)
+      .eq("status", "accepted")
+      .maybeSingle();
+    const hiredId = (accepted as { freelancer_id: string } | null)?.freelancer_id;
+    const eligible = user.id === jobRow.client_id || user.id === hiredId;
+    if (eligible) {
+      const { data: existing } = await supabase
+        .from("reviews")
+        .select("id")
+        .eq("job_id", id)
+        .eq("reviewer_id", user.id)
+        .maybeSingle();
+      reviewSlot = existing ? (
+        <p className="mt-8 text-sm text-muted-foreground">
+          You already reviewed this project.
+        </p>
+      ) : (
+        <ReviewForm jobId={id} />
+      );
+    }
+  }
+
   return (
     <main>
       <JobDetail id={id} job={mapJobRowToJob(jobRow)}>
         {proposalSlot}
+        {reviewSlot}
       </JobDetail>
     </main>
   );

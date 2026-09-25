@@ -338,6 +338,61 @@ export async function setProposalStatus(
   }
 }
 
+/** Leave one review on a closed project. The other party is chosen from the hire, not the form. */
+export async function createReview(jobId: string, formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const rating = Number(String(formData.get("rating") ?? ""));
+  const comment = String(formData.get("comment") ?? "").trim();
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    return { error: "Choose a rating from 1 to 5." };
+  }
+
+  const { data: job, error: jobError } = await supabase
+    .from("jobs")
+    .select("id, client_id, status")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (jobError) return { error: jobError.message };
+  if (!job) return { error: "That project is not listed." };
+  if (job.status !== "closed") {
+    return { error: "Reviews open after the project is closed." };
+  }
+
+  const { data: accepted, error: proposalError } = await supabase
+    .from("proposals")
+    .select("freelancer_id")
+    .eq("job_id", jobId)
+    .eq("status", "accepted")
+    .maybeSingle();
+  if (proposalError) return { error: proposalError.message };
+  if (!accepted) return { error: "This project has no hired freelancer to review." };
+
+  const isClient = user.id === job.client_id;
+  const isFreelancer = user.id === accepted.freelancer_id;
+  if (!isClient && !isFreelancer) {
+    return { error: "Only the client and the hired freelancer can review this project." };
+  }
+  const revieweeId = isClient ? accepted.freelancer_id : job.client_id;
+
+  const { error } = await supabase.from("reviews").insert({
+    job_id: jobId,
+    reviewer_id: user.id,
+    reviewee_id: revieweeId,
+    rating,
+    comment: comment || null,
+  });
+  if (error) {
+    if (/duplicate|unique/i.test(error.message)) {
+      return { error: "You already reviewed this project." };
+    }
+    return { error: error.message };
+  }
+
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath(`/talent/${revieweeId}`);
+  redirect(`/jobs/${jobId}`);
+}
+
 /** Job owner closes / reopens their job. */
 export async function setJobStatus(
   jobId: string,

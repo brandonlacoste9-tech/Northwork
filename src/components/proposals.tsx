@@ -239,21 +239,21 @@ export function ProposalList({
 }
 
 /** Sign-in nudge shown to visitors who are not logged in. */
-export function ProposalSignIn({ proposalCount = 0 }: { proposalCount?: number }) {
+export async function ProposalSignIn({ proposalCount = 0 }: { proposalCount?: number }) {
+  const locale = await getLocale();
+  const t = (key: MessageKey) => translate(locale, key);
   return (
     <section id="pitch" className="mt-10 border-t pt-8">
-      <h2 className="font-heading text-2xl">Send a pitch</h2>
+      <h2 className="font-heading text-2xl">{t("jobs.sendPitch")}</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        {proposalCount === 0
-          ? "No pitches yet — be the first to pitch this project. You need an account to send one."
-          : "You need an account to pitch on this project."}
+        {proposalCount === 0 ? t("pitch.signInEmpty") : t("pitch.signInBody")}
       </p>
       <div className="mt-4 flex gap-2">
         <Button asChild className="h-10">
-          <Link href="/login">Log in</Link>
+          <Link href="/login">{t("nav.login")}</Link>
         </Button>
         <Button asChild variant="outline" className="h-10">
-          <Link href="/signup">Create account</Link>
+          <Link href="/signup">{t("nav.signup")}</Link>
         </Button>
       </div>
     </section>

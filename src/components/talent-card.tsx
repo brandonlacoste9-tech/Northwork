@@ -59,14 +59,14 @@ export function TalentCard({ person }: { person: Freelancer }) {
               </li>
             ))}
           </ul>
-          <div className="mt-auto flex h-8 items-center justify-between gap-2">
-            <p className="shrink-0 font-heading text-lg tabular-nums">
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <p className="font-heading text-lg tabular-nums">
               {person.hourlyRate > 0 ? formatHourly(person.hourlyRate, locale) : "\u00a0"}
             </p>
-            <div className="flex min-w-0 items-center justify-end gap-1.5">
+            <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5">
               {person.verified ? <TrustBadge kind="verified" /> : null}
               {person.availability ? (
-                <Badge variant="outline" className="max-w-28 truncate">
+                <Badge variant="outline" className="h-auto max-w-full whitespace-normal">
                   {availabilityLabel(person.availability, locale)}
                 </Badge>
               ) : null}

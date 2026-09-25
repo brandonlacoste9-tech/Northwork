@@ -217,6 +217,9 @@ const en = {
   "privacy.title": "Privacy",
   "pitch.left": "{{count}} pitches left this month",
   "pitch.proIncluded": "Pro · pitches included",
+  "pitch.signInEmpty":
+    "No pitches yet — be the first to pitch this project. You need an account to send one.",
+  "pitch.signInBody": "You need an account to pitch on this project.",
   "upsell.title": "You are out of pitches",
   "upsell.body":
     "Free accounts get 8 pitches a month, reset on the 1st. Buy 15 pitches for $12 CAD, or go Pro for $19 CAD a month and 50 pitches.",
@@ -481,6 +484,9 @@ const fr: Record<keyof typeof en, string> = {
   "privacy.title": "Confidentialité",
   "pitch.left": "{{count}} offres restantes ce mois-ci",
   "pitch.proIncluded": "Pro · offres incluses",
+  "pitch.signInEmpty":
+    "Aucune offre pour l'instant — soyez la première personne à proposer. Vous devez avoir un compte pour envoyer une offre.",
+  "pitch.signInBody": "Vous devez avoir un compte pour envoyer une offre.",
   "upsell.title": "Vous n'avez plus d'offres",
   "upsell.body":
     "Le compte gratuit a 8 offres par mois, remises à zéro le 1er. Achetez 15 offres pour 12 $ CAD, ou passez à Pro pour 19 $ CAD par mois et 50 offres.",

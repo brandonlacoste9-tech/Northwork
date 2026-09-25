@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { JobDetail } from "@/components/job-detail";
@@ -107,7 +108,24 @@ export default async function JobPage({ params }: PageProps) {
       <ProposalList jobId={id} jobStatus={jobRow.status} proposals={enriched} />
     );
   } else if (user) {
-    proposalSlot = <ProposalForm jobId={id} />;
+    const { data: thread } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("job_id", id)
+      .eq("freelancer_id", user.id)
+      .maybeSingle();
+    proposalSlot = (
+      <>
+        {thread?.id ? (
+          <p className="mt-8">
+            <Link href={`/messages/${thread.id}`} className="font-medium text-primary hover:underline">
+              Open your thread with the client
+            </Link>
+          </p>
+        ) : null}
+        <ProposalForm jobId={id} />
+      </>
+    );
   } else {
     proposalSlot = <ProposalSignIn />;
   }

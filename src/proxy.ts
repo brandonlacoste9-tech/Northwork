@@ -8,12 +8,14 @@ export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const publishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   // Supabase not configured yet (fresh clone) — pass requests through.
-  if (!url || !anonKey) return supabaseResponse;
+  if (!url || !publishableKey) return supabaseResponse;
 
-  const supabase = createServerClient(url, anonKey, {
+  const supabase = createServerClient(url, publishableKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -30,8 +32,8 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  // Refresh the session if expired — required for Server Components.
-  await supabase.auth.getUser();
+  // Verify the session cookie on each request. getClaims checks the signature.
+  await supabase.auth.getClaims();
 
   return supabaseResponse;
 }

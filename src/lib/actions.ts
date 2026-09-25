@@ -34,6 +34,203 @@ async function requireUser() {
   return { supabase, user };
 }
 
+/** Make sure the signed-in user has a profile row so messaging can reference it. */
+async function ensureOwnProfile(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+) {
+  const { data } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", userId)
+    .maybeSingle();
+  if (data) return;
+  const { error } = await supabase.from("profiles").insert({ id: userId });
+  if (error) throw new Error(error.message);
+}
+
+async function openConversation(jobId: string, freelancerId: string) {
+  const { supabase, user } = await requireUser();
+  await ensureOwnProfile(supabase, user.id);
+
+  const { data: job, error: jobError } = await supabase
+    .from("jobs")
+    .select("id, client_id")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (jobError) throw new Error(jobError.message);
+  if (!job) throw new Error("That project is not listed.");
+
+  const isClient = user.id === job.client_id;
+  const isFreelancer = user.id === freelancerId;
+  if (!isClient && !isFreelancer) {
+    throw new Error("Only the client or the freelancer on this pitch can open the thread.");
+  }
+
+  const { data: proposal, error: proposalError } = await supabase
+    .from("proposals")
+    .select("status")
+    .eq("job_id", jobId)
+    .eq("freelancer_id", freelancerId)
+    .maybeSingle();
+  if (proposalError) throw new Error(proposalError.message);
+  if (!proposal || (proposal.status !== "pending" && proposal.status !== "accepted")) {
+    throw new Error("There is no open pitch to talk about.");
+  }
+
+  const { data: existing } = await supabase
+    .from("conversations")
+    .select("id")
+    .eq("job_id", jobId)
+    .eq("freelancer_id", freelancerId)
+    .maybeSingle();
+  if (existing?.id) return existing.id as string;
+
+  const { data: created, error } = await supabase
+    .from("conversations")
+    .insert({
+      job_id: jobId,
+      client_id: job.client_id,
+      freelancer_id: freelancerId,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return created.id as string;
+}
+
+export type InboxConversation = {
+  id: string;
+  jobTitle: string;
+  otherName: string;
+  preview: string;
+  unread: number;
+  updatedAt: string;
+};
+
+export type ThreadMessage = {
+  id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+};
+
+/** Open the thread for a pitch, creating it when this is the first message. */
+export async function getOrCreateConversation(jobId: string, freelancerId: string) {
+  const id = await openConversation(jobId, freelancerId);
+  redirect(`/messages/${id}`);
+}
+
+export async function listConversations(): Promise<InboxConversation[]> {
+  const { supabase, user } = await requireUser();
+  const { data: rows, error } = await supabase
+    .from("conversations")
+    .select("id, job_id, client_id, freelancer_id, created_at")
+    .or(`client_id.eq.${user.id},freelancer_id.eq.${user.id}`)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  const conversations = rows ?? [];
+  if (conversations.length === 0) return [];
+
+  const ids = conversations.map((row) => row.id);
+  const profileIds = [
+    ...new Set(conversations.flatMap((row) => [row.client_id, row.freelancer_id])),
+  ];
+  const jobIds = [...new Set(conversations.map((row) => row.job_id))];
+
+  const [{ data: profiles }, { data: jobs }, { data: messages }, { data: reads }] =
+    await Promise.all([
+      supabase.from("profiles").select("id, display_name").in("id", profileIds),
+      supabase.from("jobs").select("id, title").in("id", jobIds),
+      supabase
+        .from("messages")
+        .select("id, conversation_id, sender_id, body, created_at")
+        .in("conversation_id", ids)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("conversation_reads")
+        .select("conversation_id, last_read_at")
+        .eq("user_id", user.id)
+        .in("conversation_id", ids),
+    ]);
+
+  const nameById = new Map(
+    (profiles ?? []).map((profile) => [profile.id as string, (profile.display_name as string | null) || "Northernwork member"])
+  );
+  const titleById = new Map(
+    (jobs ?? []).map((job) => [job.id as string, (job.title as string) || "Project"])
+  );
+  const readAt = new Map(
+    (reads ?? []).map((read) => [read.conversation_id as string, Date.parse(read.last_read_at as string)])
+  );
+  const latest = new Map<string, { body: string; created_at: string }>();
+  const unread = new Map<string, number>();
+  for (const message of messages ?? []) {
+    const conversationId = message.conversation_id as string;
+    if (!latest.has(conversationId)) {
+      latest.set(conversationId, {
+        body: message.body as string,
+        created_at: message.created_at as string,
+      });
+    }
+    const sentAt = Date.parse(message.created_at as string);
+    const seenAt = readAt.get(conversationId) ?? 0;
+    if (message.sender_id !== user.id && sentAt > seenAt) {
+      unread.set(conversationId, (unread.get(conversationId) ?? 0) + 1);
+    }
+  }
+
+  return conversations
+    .map((row) => {
+      const otherId = row.client_id === user.id ? row.freelancer_id : row.client_id;
+      const last = latest.get(row.id);
+      return {
+        id: row.id as string,
+        jobTitle: titleById.get(row.job_id) ?? "Project",
+        otherName: nameById.get(otherId) ?? "Northernwork member",
+        preview: last?.body ?? "No messages yet",
+        unread: unread.get(row.id) ?? 0,
+        updatedAt: last?.created_at ?? (row.created_at as string),
+      };
+    })
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+}
+
+export async function sendMessage(conversationId: string, formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const body = String(formData.get("body") ?? "").trim();
+  if (!body) return { error: "Write a message." };
+  if (body.length > 5000) return { error: "Keep the message under 5,000 characters." };
+
+  const { data, error } = await supabase
+    .from("messages")
+    .insert({
+      conversation_id: conversationId,
+      sender_id: user.id,
+      body,
+    })
+    .select("id, sender_id, body, created_at")
+    .single();
+  if (error) return { error: error.message };
+
+  revalidatePath("/messages");
+  revalidatePath(`/messages/${conversationId}`);
+  return { message: data as ThreadMessage };
+}
+
+export async function markConversationRead(conversationId: string) {
+  const { supabase, user } = await requireUser();
+  const { error } = await supabase.from("conversation_reads").upsert(
+    {
+      conversation_id: conversationId,
+      user_id: user.id,
+      last_read_at: new Date().toISOString(),
+    },
+    { onConflict: "conversation_id,user_id" }
+  );
+  if (error) throw new Error(error.message);
+}
+
 /** Sign the current user out (used by the header sign-out button). */
 export async function signOut() {
   const supabase = await createClient();
@@ -72,6 +269,7 @@ export async function upsertProfile(formData: FormData) {
 /** Post a new project as the logged-in client (matches the /post form). */
 export async function createJob(formData: FormData) {
   const { supabase, user } = await requireUser();
+  await ensureOwnProfile(supabase, user.id);
 
   const { data, error } = await supabase
     .from("jobs")
@@ -95,6 +293,7 @@ export async function createJob(formData: FormData) {
 /** Submit a proposal on a job as the logged-in freelancer. */
 export async function createProposal(jobId: string, formData: FormData) {
   const { supabase, user } = await requireUser();
+  await ensureOwnProfile(supabase, user.id);
 
   const { error } = await supabase.from("proposals").insert({
     job_id: jobId,
@@ -115,6 +314,15 @@ export async function setProposalStatus(
 ) {
   const { supabase } = await requireUser();
 
+  const { data: proposal, error: lookupError } = await supabase
+    .from("proposals")
+    .select("freelancer_id")
+    .eq("id", proposalId)
+    .eq("job_id", jobId)
+    .maybeSingle();
+  if (lookupError) throw new Error(lookupError.message);
+  if (!proposal) throw new Error("That pitch is not on this project.");
+
   const { error } = await supabase
     .from("proposals")
     .update({ status })
@@ -123,6 +331,11 @@ export async function setProposalStatus(
 
   if (error) throw new Error(error.message);
   revalidatePath(`/jobs/${jobId}`);
+
+  if (status === "accepted") {
+    const conversationId = await openConversation(jobId, proposal.freelancer_id);
+    redirect(`/messages/${conversationId}`);
+  }
 }
 
 /** Job owner closes / reopens their job. */

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { signOut } from "@/lib/actions";
+import { listConversations, signOut } from "@/lib/actions";
 import { isSupabaseConfigured } from "@/lib/backend";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,8 +29,22 @@ export async function AuthNav() {
     );
   }
 
+  const conversations = await listConversations();
+  const unread = conversations.reduce((sum, item) => sum + item.unread, 0);
+
   return (
     <>
+      <Link
+        href="/messages"
+        className="text-sm font-medium text-foreground/80 hover:text-foreground"
+      >
+        Inbox
+        {unread > 0 ? (
+          <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-xs text-primary-foreground">
+            {unread}
+          </span>
+        ) : null}
+      </Link>
       <Link
         href="/profile"
         className="text-sm font-medium text-foreground/80 hover:text-foreground"

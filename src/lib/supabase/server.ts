@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { supabasePublishableKey } from "@/lib/backend";
 
 function env(name: string): string {
   const value = process.env[name];
@@ -14,9 +15,15 @@ function env(name: string): string {
 /** Supabase client for Server Components, Server Actions, and Route Handlers. */
 export async function createClient() {
   const cookieStore = await cookies();
+  const key = supabasePublishableKey();
+  if (!key) {
+    throw new Error(
+      "Missing NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY. Copy .env.example to .env.local and fill in your Supabase project values."
+    );
+  }
   return createServerClient(
     env("NEXT_PUBLIC_SUPABASE_URL"),
-    env("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+    key,
     {
       cookies: {
         getAll() {

@@ -16,6 +16,7 @@ import {
 const links = [
   { href: "/talent", label: "Talent" },
   { href: "/jobs", label: "Jobs" },
+  { href: "/messages", label: "Messages" },
 ];
 
 export function SiteHeader({ authNav }: { authNav?: React.ReactNode }) {

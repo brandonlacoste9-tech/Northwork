@@ -25,7 +25,8 @@ What unlocks: accounts (log in / sign up in the header), a "My profile" page
 that publishes your freelancer profile to the talent directory, project
 posting to the shared job board, and pitches on projects — freelancers pitch
 from the project page, clients accept or decline and can close or reopen
-their listings. Payments and escrow are Phase 2 (see `src/lib/stripe.ts`).
+their listings. Accepting a pitch opens a private message thread at
+`/messages`. Payments and escrow are Phase 2 (see `src/lib/stripe.ts`).
 
 ## Run locally
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,6 +63,11 @@ export default async function ProfilePage() {
       <p className="mt-3 text-muted-foreground">
         This is what clients see in the talent directory. Rates in CAD, work
         in Canada.
+      </p>
+      <p className="mt-4">
+        <Link href="/settings/payouts" className="font-medium text-primary hover:underline">
+          Set up CAD payouts
+        </Link>
       </p>
       <Card className="mt-8">
         <CardHeader>

@@ -43,6 +43,7 @@ export type ProfileRow = {
   city: string | null;
   province: string | null;
   availability: string | null;
+  stripe_account_id?: string | null;
   created_at: string;
 };
 

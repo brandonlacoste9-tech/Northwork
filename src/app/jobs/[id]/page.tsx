@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { EscrowPanel } from "@/components/escrow-panel";
 import { JobDetail } from "@/components/job-detail";
 import { ReviewForm } from "@/components/review-form";
 import {
@@ -17,6 +18,7 @@ import {
   type ProposalRow,
 } from "@/lib/backend";
 import { getSeedJob } from "@/lib/data";
+import { isStripeConfigured, stripePublishableKey } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
 
 type PageProps = {
@@ -177,10 +179,51 @@ export default async function JobPage({ params }: PageProps) {
     }
   }
 
+  let escrowSlot: ReactNode = null;
+  if (user && jobRow.status === "in_progress") {
+    const { data: accepted } = await supabase
+      .from("proposals")
+      .select("freelancer_id, bid_cad")
+      .eq("job_id", id)
+      .eq("status", "accepted")
+      .maybeSingle();
+    const hire = accepted as { freelancer_id: string; bid_cad: number | string | null } | null;
+    if (hire && (user.id === jobRow.client_id || user.id === hire.freelancer_id)) {
+      const { data: freelancer } = await supabase
+        .from("profiles")
+        .select("stripe_account_id")
+        .eq("id", hire.freelancer_id)
+        .maybeSingle();
+      const { data: payment } = await supabase
+        .from("payments")
+        .select("status, amount_cad")
+        .eq("job_id", id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const paymentRow = payment as { status: "held" | "released" | "refunded"; amount_cad: number | string } | null;
+      const amount = Number(hire.bid_cad ?? jobRow.budget_cad);
+      escrowSlot = (
+        <EscrowPanel
+          jobId={id}
+          role={user.id === jobRow.client_id ? "client" : "freelancer"}
+          amountCad={Number.isFinite(amount) ? amount : null}
+          status={paymentRow?.status ?? null}
+          freelancerConnected={Boolean(
+            (freelancer as { stripe_account_id: string | null } | null)?.stripe_account_id
+          )}
+          stripeReady={isStripeConfigured() && Boolean(stripePublishableKey())}
+          publishableKey={stripePublishableKey()}
+        />
+      );
+    }
+  }
+
   return (
     <main>
       <JobDetail id={id} job={mapJobRowToJob(jobRow)}>
         {proposalSlot}
+        {escrowSlot}
         {reviewSlot}
       </JobDetail>
     </main>

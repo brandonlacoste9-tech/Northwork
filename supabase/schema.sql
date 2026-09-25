@@ -427,3 +427,72 @@ create policy "avatars: delete own folder"
     bucket_id = 'avatars'
     and (storage.foldername(name))[1] = (select auth.uid())::text
   );
+
+-- ---------------------------------------------------------------- escrow
+alter table public.profiles add column if not exists stripe_account_id text;
+
+create or replace function private.block_stripe_account_edit()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.stripe_account_id is distinct from old.stripe_account_id
+     and coalesce(auth.role(), '') = 'authenticated' then
+    raise exception 'Payout accounts are connected through Northernwork.';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_block_stripe_account_edit on public.profiles;
+create trigger profiles_block_stripe_account_edit
+  before update on public.profiles
+  for each row
+  execute function private.block_stripe_account_edit();
+
+create table if not exists public.payments (
+  id uuid primary key default gen_random_uuid(),
+  job_id uuid not null references public.jobs (id) on delete cascade,
+  client_id uuid not null references public.profiles (id) on delete cascade,
+  freelancer_id uuid not null references public.profiles (id) on delete cascade,
+  amount_cad numeric(10, 2) not null,
+  stripe_payment_intent_id text unique,
+  status text not null check (status in ('held', 'released', 'refunded')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.stripe_events (
+  id text primary key,
+  type text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.payments enable row level security;
+alter table public.stripe_events enable row level security;
+
+drop policy if exists "payments: parties read" on public.payments;
+create policy "payments: parties read"
+  on public.payments for select
+  to authenticated
+  using ((select auth.uid()) in (client_id, freelancer_id));
+
+drop policy if exists "payments: client insert" on public.payments;
+create policy "payments: client insert"
+  on public.payments for insert
+  to authenticated
+  with check (client_id = (select auth.uid()));
+
+drop policy if exists "payments: client update" on public.payments;
+create policy "payments: client update"
+  on public.payments for update
+  to authenticated
+  using (client_id = (select auth.uid()))
+  with check (client_id = (select auth.uid()));
+
+create index if not exists payments_job_idx on public.payments (job_id);
+create index if not exists payments_client_idx on public.payments (client_id);
+create index if not exists payments_freelancer_idx on public.payments (freelancer_id);
+
+grant select, insert, update on table public.payments to authenticated;

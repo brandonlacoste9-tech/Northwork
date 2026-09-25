@@ -58,22 +58,24 @@ export function FreelancerProfile({ person }: { person: Freelancer }) {
           ))}
         </ul>
       </section>
-      <section className="mt-10">
-        <h2 className="font-heading text-2xl">Sample work</h2>
-        <div className="mt-4 grid gap-3">
-          {person.sampleWork.map((work) => (
-            <Card key={work.title}>
-              <CardHeader>
-                <CardTitle>{work.title}</CardTitle>
-                <CardDescription>{work.summary}</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-0 text-sm text-muted-foreground">
-                {person.city}, {person.province}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
+      {person.sampleWork.length > 0 ? (
+        <section className="mt-10">
+          <h2 className="font-heading text-2xl">Sample work</h2>
+          <div className="mt-4 grid gap-3">
+            {person.sampleWork.map((work) => (
+              <Card key={work.title}>
+                <CardHeader>
+                  <CardTitle>{work.title}</CardTitle>
+                  <CardDescription>{work.summary}</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0 text-sm text-muted-foreground">
+                  {person.city}, {person.province}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </article>
   );
 }

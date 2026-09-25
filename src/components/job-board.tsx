@@ -14,13 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PROVINCES, REMOTE_IN_CANADA, filterJobs } from "@/lib/data";
+import { PROVINCES, REMOTE_IN_CANADA, filterJobs, type Job } from "@/lib/data";
 import { useMarketplace } from "@/lib/marketplace";
 import { useDirectoryStatus } from "@/lib/use-directory-status";
 
-export function JobBoard() {
+export function JobBoard({ jobsProp }: { jobsProp?: Job[] }) {
   const { status, retry } = useDirectoryStatus();
-  const { jobs } = useMarketplace();
+  const { jobs: contextJobs } = useMarketplace();
+  const jobs = jobsProp ?? contextJobs;
   const [search, setSearch] = useState("");
   const [location, setLocation] = useState("all");
 

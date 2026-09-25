@@ -6,10 +6,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatBudget } from "@/lib/format";
 import { useMarketplace } from "@/lib/marketplace";
+import type { Job } from "@/lib/data";
 
-export function JobDetail({ id }: { id: string }) {
+export function JobDetail({
+  id,
+  job: jobProp,
+  children,
+}: {
+  id: string;
+  /** Pre-fetched job (Supabase mode). Falls back to the marketplace context. */
+  job?: Job;
+  children?: React.ReactNode;
+}) {
   const { jobs } = useMarketplace();
-  const job = jobs.find((item) => item.id === id);
+  const job = jobProp ?? jobs.find((item) => item.id === id);
 
   if (!job) {
     return (
@@ -62,6 +72,7 @@ export function JobDetail({ id }: { id: string }) {
           <p key={paragraph}>{paragraph}</p>
         ))}
       </div>
+      {children}
     </article>
   );
 }

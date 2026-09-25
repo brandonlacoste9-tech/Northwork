@@ -29,6 +29,7 @@ import {
   SKILLS,
   filterFreelancers,
   freelancers,
+  type Freelancer,
 } from "@/lib/data";
 import { useDirectoryStatus } from "@/lib/use-directory-status";
 
@@ -46,13 +47,14 @@ const initialFilters: Filters = {
   rate: "any",
 };
 
-export function TalentDirectory() {
+export function TalentDirectory({ people }: { people?: Freelancer[] }) {
   const { status, retry } = useDirectoryStatus();
   const [filters, setFilters] = useState<Filters>(initialFilters);
 
+  const directory = people ?? freelancers;
   const results = useMemo(
-    () => filterFreelancers(freelancers, filters),
-    [filters],
+    () => filterFreelancers(directory, filters),
+    [directory, filters],
   );
 
   const activeCount = [

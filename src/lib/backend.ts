@@ -1,0 +1,134 @@
+import {
+  REMOTE_IN_CANADA,
+  type Availability,
+  type Freelancer,
+  type Job,
+  type Province,
+  type WorkLocation,
+} from "@/lib/data";
+
+/**
+ * True when Supabase credentials are present. Reads NEXT_PUBLIC_* so it
+ * works in Server Components, Client Components, and the proxy.
+ * When false, the app runs the zero-config sample-data preview.
+ */
+export function isSupabaseConfigured(): boolean {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Supabase row shapes (mirror supabase/schema.sql)
+// ---------------------------------------------------------------------------
+
+export type ProfileRow = {
+  id: string;
+  display_name: string | null;
+  title: string | null;
+  bio: string | null;
+  skills: string[] | null;
+  hourly_rate_cad: number | string | null;
+  avatar_url: string | null;
+  languages: string[] | null;
+  city: string | null;
+  province: string | null;
+  availability: string | null;
+  created_at: string;
+};
+
+export type JobRow = {
+  id: string;
+  client_id: string;
+  title: string;
+  description: string;
+  budget_cad: number | string | null;
+  budget_type: string | null;
+  skills: string[] | null;
+  location: string | null;
+  status: string | null;
+  created_at: string;
+};
+
+export type ProposalRow = {
+  id: string;
+  job_id: string;
+  freelancer_id: string;
+  cover_letter: string;
+  bid_cad: number | string | null;
+  status: string;
+  created_at: string;
+  freelancer_name?: string | null;
+  freelancer_title?: string | null;
+  freelancer_rate?: number | string | null;
+};
+
+// ---------------------------------------------------------------------------
+// Mappers: Supabase rows -> preview UI types
+// ---------------------------------------------------------------------------
+
+export function timeAgo(iso: string): string {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "recently";
+  const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (seconds < 60) return "Just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
+  const months = Math.floor(days / 30);
+  return `${months} month${months === 1 ? "" : "s"} ago`;
+}
+
+function toNumber(value: number | string | null): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
+function paragraphs(text: string): string[] {
+  const parts = text
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return parts.length > 0 ? parts : [text.trim()];
+}
+
+/** Map a Supabase profiles row to the talent-directory Freelancer shape. */
+export function mapProfileToFreelancer(row: ProfileRow): Freelancer {
+  return {
+    id: row.id,
+    name: row.display_name?.trim() || "Northernwork freelancer",
+    role: row.title?.trim() || "Freelancer",
+    city: row.city?.trim() || "",
+    province: (row.province as Province) || "Ontario",
+    skills: row.skills ?? [],
+    hourlyRate: toNumber(row.hourly_rate_cad),
+    availability: (row.availability as Availability) || "Available this week",
+    bio: row.bio?.trim() || "",
+    sampleWork: [],
+  };
+}
+
+/** Map a Supabase jobs row to the job-board Job shape. */
+export function mapJobRowToJob(row: JobRow): Job {
+  const budget = toNumber(row.budget_cad);
+  return {
+    id: row.id,
+    title: row.title,
+    description: paragraphs(row.description),
+    budgetMin: budget,
+    budgetMax: budget,
+    location: (row.location as WorkLocation) || REMOTE_IN_CANADA,
+    skills: row.skills ?? [],
+    postedAt: Date.parse(row.created_at) || Date.now(),
+    postedLabel: timeAgo(row.created_at),
+    client: "A Northernwork client",
+  };
+}

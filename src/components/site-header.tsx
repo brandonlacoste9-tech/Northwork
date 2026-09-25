@@ -18,7 +18,7 @@ const links = [
   { href: "/jobs", label: "Jobs" },
 ];
 
-export function SiteHeader() {
+export function SiteHeader({ authNav }: { authNav?: React.ReactNode }) {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
@@ -38,6 +38,7 @@ export function SiteHeader() {
           <Button asChild size="lg" className="h-10 px-4">
             <Link href="/post">Post a project</Link>
           </Button>
+          {authNav}
         </nav>
         <Sheet>
           <SheetTrigger asChild>
@@ -70,6 +71,9 @@ export function SiteHeader() {
                   <Link href="/post">Post a project</Link>
                 </Button>
               </SheetClose>
+              {authNav ? (
+                <div className="mt-3 flex flex-col gap-1 px-3">{authNav}</div>
+              ) : null}
             </nav>
           </SheetContent>
         </Sheet>

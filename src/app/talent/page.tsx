@@ -1,5 +1,11 @@
 import type { Metadata } from "next";
 import { TalentDirectory } from "@/components/talent-directory";
+import {
+  isSupabaseConfigured,
+  mapProfileToFreelancer,
+  type ProfileRow,
+} from "@/lib/backend";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "Talent",
@@ -7,7 +13,19 @@ export const metadata: Metadata = {
     "Browse Canadian freelancers on Northernwork. Filter by province, skill, and CAD hourly rate.",
 };
 
-export default function TalentPage() {
+export default async function TalentPage() {
+  // Supabase configured -> real freelancer directory. Otherwise the
+  // directory falls back to the sample-data preview.
+  let people = undefined;
+  if (isSupabaseConfigured()) {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: false });
+    people = ((data ?? []) as ProfileRow[]).map(mapProfileToFreelancer);
+  }
+
   return (
     <main>
       <div className="border-b">
@@ -22,7 +40,7 @@ export default function TalentPage() {
           </p>
         </div>
       </div>
-      <TalentDirectory />
+      <TalentDirectory people={people} />
     </main>
   );
 }

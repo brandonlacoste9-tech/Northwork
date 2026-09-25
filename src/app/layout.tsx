@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Source_Sans_3 } from "next/font/google";
+import { AuthNav } from "@/components/auth-nav";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { MarketplaceProvider } from "@/lib/marketplace";
@@ -43,7 +44,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col">
         <MarketplaceProvider>
-          <SiteHeader />
+          <SiteHeader authNav={<AuthNav />} />
           <div className="flex-1">{children}</div>
           <SiteFooter />
         </MarketplaceProvider>

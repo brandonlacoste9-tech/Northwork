@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PROVINCES, REMOTE_IN_CANADA, SKILLS, type WorkLocation } from "@/lib/data";
+import { createJob } from "@/lib/actions";
+import { isSupabaseConfigured } from "@/lib/backend";
 import { useMarketplace } from "@/lib/marketplace";
 import { cn } from "cn";
 
@@ -28,7 +30,8 @@ export function PostProjectForm() {
   const [skills, setSkills] = useState<string[]>([]);
   const [location, setLocation] = useState<string>("");
   const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({});
-
+  const [submitting, setSubmitting] = useState(false);
+  const configured = isSupabaseConfigured();
   function clearError(key: FieldKey) {
     setErrors((current) => ({ ...current, [key]: undefined }));
   }
@@ -42,7 +45,7 @@ export function PostProjectForm() {
     clearError("skills");
   }
 
-  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextErrors: Partial<Record<FieldKey, string>> = {};
     const amount = Number(budget);
@@ -62,6 +65,24 @@ export function PostProjectForm() {
     ).find((key) => nextErrors[key]);
     if (firstInvalid) {
       document.getElementById(firstInvalid)?.focus();
+      return;
+    }
+
+    // Supabase configured: publish to the shared job board (requires login;
+    // the server action redirects to /login otherwise).
+    if (configured) {
+      setSubmitting(true);
+      try {
+        const formData = new FormData();
+        formData.set("title", title.trim());
+        formData.set("description", description.trim());
+        formData.set("budget", String(Math.round(amount)));
+        skills.forEach((skill) => formData.append("skills", skill));
+        formData.set("location", location);
+        await createJob(formData);
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
 
@@ -217,8 +238,8 @@ export function PostProjectForm() {
           </p>
         )}
       </div>
-      <Button type="submit" className="h-11 px-5 sm:w-fit">
-        Post project
+      <Button type="submit" disabled={submitting} className="h-11 px-5 sm:w-fit">
+        {submitting ? "Posting…" : "Post project"}
       </Button>
     </form>
   );

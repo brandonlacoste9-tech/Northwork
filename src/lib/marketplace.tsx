@@ -26,8 +26,14 @@ const MarketplaceContext = createContext<MarketplaceValue | null>(null);
 
 export function MarketplaceProvider({
   children,
+  initialJobs,
 }: {
   children: React.ReactNode;
+  /**
+   * When provided (Supabase configured), the job board renders these
+   * server-fetched jobs instead of the sample-data preview list.
+   */
+  initialJobs?: Job[];
 }) {
   const [posted, setPosted] = useState<Job[]>([]);
 
@@ -54,8 +60,9 @@ export function MarketplaceProvider({
 
   const jobs = useMemo(
     () =>
+      initialJobs ??
       [...posted, ...seedJobs].sort((a, b) => b.postedAt - a.postedAt),
-    [posted],
+    [posted, initialJobs],
   );
 
   const value = useMemo(() => ({ jobs, addJob }), [jobs, addJob]);

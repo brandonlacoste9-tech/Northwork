@@ -35,6 +35,21 @@ export const metadata: Metadata = {
     siteName: "Northernwork",
     locale: "en_CA",
     type: "website",
+    images: [
+      {
+        url: "https://northernwork.ca/og-image.jpg",
+        width: 2192,
+        height: 1152,
+        alt: "Northernwork — Le marché freelance du Canada. Canada's freelance marketplace.",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Northernwork",
+    description:
+      "A freelance marketplace for clients and freelancers in Canada.",
+    images: ["https://northernwork.ca/og-image.jpg"],
   },
 };
 

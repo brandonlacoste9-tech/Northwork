@@ -84,6 +84,10 @@ Free freelancers get 8 pitches a month, reset on the 1st (America/Toronto). Pro 
 
 Checkout uses the existing Stripe prices. Nothing in this repo creates a new product. Cancel Pro in the Customer Portal from `/pricing`. The balance sits in the account menu and next to Send a pitch. At zero pitches the form is replaced by the top-up and Pro options. With no Supabase credentials, `/pricing` explains the plans and does not start Checkout.
 
+## Job alerts
+
+A signed-in freelancer can save the current job-board filters. When a matching project is posted, Northernwork adds an in-site alert. If `RESEND_API_KEY` and `NOTIFICATION_FROM` are set, it also sends email with a one-click unsubscribe link. Daily searches are grouped by `GET /api/cron/job-alerts` with `Authorization: Bearer $CRON_SECRET`, meant to run once each morning. Sample profiles are not alerted. The sample preview hides the save button.
+
 ## Google sign-in
 
 `/login` and `/signup` keep email and password, and add Continue with Google. The button calls `signInWithOAuth({ provider: "google" })`. Supabase returns to `/auth/callback`, which exchanges the code for a session. Email confirmation is unchanged.

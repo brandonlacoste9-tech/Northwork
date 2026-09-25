@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { DirectoryEmpty, DirectoryError, DirectoryLoading } from "@/components/directory-state";
 import { JobCard } from "@/components/job-card";
+import { SaveSearch } from "@/components/save-search";
 import { useLocale, useT } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -208,6 +209,7 @@ export function JobBoard({ jobsProp }: { jobsProp?: Job[] }) {
           {t("jobs.clear")}
         </Button>
       ) : null}
+      <SaveSearch filters={filters} />
     </div>
   );
 

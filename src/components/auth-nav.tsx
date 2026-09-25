@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listConversations, signOut } from "@/lib/actions";
 import { isSupabaseConfigured } from "@/lib/backend";
@@ -50,13 +51,15 @@ export async function AuthNav({ stacked = false }: { stacked?: boolean }) {
     <>
       <Link
         href="/notifications"
+        aria-label={t("nav.alerts")}
         className={
           stacked
-            ? "rounded-lg px-3 py-3 text-base font-medium hover:bg-muted"
-            : "text-sm font-medium text-foreground/80 hover:text-foreground"
+            ? "inline-flex items-center gap-2 rounded-lg px-3 py-3 text-base font-medium hover:bg-muted"
+            : "inline-flex items-center gap-1 text-sm font-medium text-foreground/80 hover:text-foreground"
         }
       >
-        {t("nav.alerts")}
+        <Bell className="size-4" aria-hidden="true" />
+        {stacked ? <span>{t("nav.alerts")}</span> : null}
         {(count ?? 0) > 0 ? (
           <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-xs text-primary-foreground">
             {count}

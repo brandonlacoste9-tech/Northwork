@@ -238,7 +238,7 @@ export function PostProjectForm() {
           </p>
         )}
       </div>
-      <Button type="submit" disabled={submitting} className="h-11 px-5 sm:w-fit">
+      <Button type="submit" disabled={submitting} className="h-11 w-full px-5 sm:w-fit">
         {submitting ? "Posting…" : "Post project"}
       </Button>
     </form>

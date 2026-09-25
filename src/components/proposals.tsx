@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DirectoryEmpty } from "@/components/directory-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,7 +56,7 @@ export function ProposalForm({ jobId }: { jobId: string }) {
             className="h-10"
           />
         </div>
-        <Button type="submit" className="h-11 px-5 sm:w-fit">
+        <Button type="submit" className="h-11 w-full px-5 sm:w-fit">
           Send pitch
         </Button>
       </form>
@@ -94,9 +95,13 @@ export function ProposalList({
         )}
       </div>
       {proposals.length === 0 ? (
-        <p className="mt-4 text-sm text-muted-foreground">
-          No pitches yet. Share the listing to get freelancers interested.
-        </p>
+        <div className="mt-4">
+          <DirectoryEmpty
+            title="No pitches yet"
+            body="Freelancers on Northernwork pitch in CAD. Invite someone from the talent directory."
+            action={{ href: "/talent", label: "Browse talent" }}
+          />
+        </div>
       ) : (
         <ul className="mt-4 grid gap-4">
           {proposals.map((proposal) => (

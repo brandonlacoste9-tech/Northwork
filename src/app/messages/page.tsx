@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { DirectoryEmpty } from "@/components/directory-state";
 import {
   Card,
   CardDescription,
@@ -45,13 +46,13 @@ export default async function MessagesPage() {
         One thread per project.
       </p>
       {conversations.length === 0 ? (
-        <p className="mt-8 text-muted-foreground">
-          No conversations yet.{" "}
-          <Link href="/jobs" className="font-medium text-primary hover:underline">
-            Browse open projects
-          </Link>{" "}
-          or accept a pitch to start one.
-        </p>
+        <div className="mt-8">
+          <DirectoryEmpty
+            title="No conversations yet"
+            body="A thread opens when a client accepts a pitch. Until then, the inbox stays empty."
+            action={{ href: "/jobs", label: "Browse open projects" }}
+          />
+        </div>
       ) : (
         <ul className="mt-8 divide-y rounded-xl bg-card ring-1 ring-foreground/10">
           {conversations.map((conversation) => (

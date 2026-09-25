@@ -193,11 +193,19 @@ export function TalentDirectory({ people }: { people?: Freelancer[] }) {
                   : `${results.length} freelancers`}
               </p>
               {results.length === 0 ? (
-                <DirectoryEmpty
-                  title="No one matches those filters"
-                  body="Try another province, skill, or rate. Northernwork only lists people working in Canada."
-                  onClear={() => setFilters(initialFilters)}
-                />
+                directory.length === 0 ? (
+                  <DirectoryEmpty
+                    title="No freelancers published yet"
+                    body="A profile needs a Canadian city, a province, and an hourly rate in CAD."
+                    action={{ href: "/profile", label: "Publish your profile" }}
+                  />
+                ) : (
+                  <DirectoryEmpty
+                    title="No one matches those filters"
+                    body="Try another province, skill, or rate. Northernwork only lists people working in Canada."
+                    onClear={() => setFilters(initialFilters)}
+                  />
+                )
               ) : (
                 <ul className="grid gap-4 sm:grid-cols-2">
                   {results.map((person) => (

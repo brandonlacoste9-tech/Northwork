@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { MapPin } from "lucide-react";
+import { DirectoryEmpty } from "@/components/directory-state";
 import { InviteDialog } from "@/components/invite-dialog";
 import { PersonAvatar } from "@/components/person-avatar";
 import { Badge } from "@/components/ui/badge";
@@ -99,7 +100,13 @@ export function FreelancerProfile({
         <section className="mt-10">
           <h2 className="font-heading text-2xl">Reviews</h2>
           {reviews.length === 0 ? (
-            <p className="mt-3 text-muted-foreground">No reviews yet.</p>
+            <div className="mt-4">
+              <DirectoryEmpty
+                title="No reviews yet"
+                body="Reviews open after a project is closed, one from the client and one from the freelancer."
+                action={{ href: "/jobs", label: "Browse open projects" }}
+              />
+            </div>
           ) : (
             <>
               <p className="mt-3 text-sm text-muted-foreground">

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -48,10 +49,12 @@ export function DirectoryEmpty({
   title,
   body,
   onClear,
+  action,
 }: {
   title: string;
   body: string;
-  onClear: () => void;
+  onClear?: () => void;
+  action?: { href: string; label: string };
 }) {
   return (
     <Card>
@@ -59,15 +62,22 @@ export function DirectoryEmpty({
         <CardTitle>{title}</CardTitle>
         <CardDescription>{body}</CardDescription>
       </CardHeader>
-      <CardContent>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onClear}
-          className="h-10 px-4"
-        >
-          Clear filters
-        </Button>
+      <CardContent className="flex flex-wrap gap-2">
+        {onClear ? (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClear}
+            className="h-10 px-4"
+          >
+            Clear filters
+          </Button>
+        ) : null}
+        {action ? (
+          <Button asChild className="h-10 px-4">
+            <Link href={action.href}>{action.label}</Link>
+          </Button>
+        ) : null}
       </CardContent>
     </Card>
   );

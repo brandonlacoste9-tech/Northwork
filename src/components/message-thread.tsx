@@ -93,7 +93,7 @@ export function MessageThread({
               >
                 <div
                   className={cn(
-                    "max-w-[85%] rounded-2xl px-4 py-2 text-sm leading-6 sm:max-w-[70%]",
+                    "max-w-[85%] rounded-2xl px-4 py-2 text-sm leading-6 break-words sm:max-w-[70%]",
                     mine
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted text-foreground"
@@ -137,7 +137,7 @@ export function MessageThread({
             {error}
           </p>
         ) : null}
-        <Button type="submit" disabled={pending} className="h-11 px-5 sm:w-fit">
+        <Button type="submit" disabled={pending} className="h-11 w-full px-5 sm:w-fit">
           {pending ? "Sending…" : "Send"}
         </Button>
       </form>

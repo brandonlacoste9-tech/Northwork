@@ -1,10 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { DirectoryEmpty, DirectoryError, DirectoryLoading } from "@/components/directory-state";
 import { JobCard } from "@/components/job-card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -85,16 +83,20 @@ export function JobBoard({ jobsProp }: { jobsProp?: Job[] }) {
                 : `${results.length} open projects`}
             </p>
             {results.length === 0 ? (
-              <div className="space-y-3">
+              jobs.length === 0 ? (
+                <DirectoryEmpty
+                  title="No open projects yet"
+                  body="Canadian clients post briefs here, with a budget in CAD and a province or remote inside Canada."
+                  action={{ href: "/post", label: "Post a project" }}
+                />
+              ) : (
                 <DirectoryEmpty
                   title="No projects match"
                   body="Try another province, or post the brief yourself. Northernwork only lists work inside Canada."
                   onClear={clear}
+                  action={{ href: "/post", label: "Post a project" }}
                 />
-                <Button asChild variant="outline" className="h-10">
-                  <Link href="/post">Post a project</Link>
-                </Button>
-              </div>
+              )
             ) : (
               <ul className="grid gap-4">
                 {results.map((job) => (

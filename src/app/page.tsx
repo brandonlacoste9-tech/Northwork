@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { JobCard } from "@/components/job-card";
 import { TalentCard } from "@/components/talent-card";
@@ -78,7 +79,15 @@ export default function HomePage() {
             </p>
           </div>
           <aside className="rounded-2xl bg-primary p-6 text-primary-foreground sm:p-8">
-            <p className="font-heading text-2xl tracking-tight">
+            <Image
+              src="/northernwork-logo.jpg"
+              alt="Northernwork logo: a pine, a north star, and a compass needle"
+              width={512}
+              height={512}
+              className="mx-auto aspect-square w-full max-w-xs rounded-xl"
+              priority
+            />
+            <p className="mt-6 font-heading text-2xl tracking-tight">
               The work stays here.
             </p>
             <p className="mt-3 leading-7 text-primary-foreground/85">

@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { DirectoryEmpty, DirectoryError, DirectoryLoading } from "@/components/directory-state";
 import { JobCard } from "@/components/job-card";
-import { SaveSearch } from "@/components/save-search";
 import { useLocale, useT } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +24,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { saveJobSearch } from "@/lib/job-alerts";
 import { PROVINCES, filterJobs, type BudgetType, type Job } from "@/lib/data";
 import { useMarketplace } from "@/lib/marketplace";
 import { provinceLabel } from "@/lib/place";
@@ -53,7 +53,49 @@ const initialFilters: Filters = {
   sort: "newest",
 };
 
-export function JobBoard({ jobsProp }: { jobsProp?: Job[] }) {
+function SaveSearch({
+  idPrefix,
+  filters,
+  canSave,
+}: {
+  idPrefix: string;
+  filters: Filters;
+  canSave: boolean;
+}) {
+  const t = useT();
+  if (!canSave) {
+    return <p className="border-t pt-4 text-sm text-muted-foreground">{t("alerts.preview")}</p>;
+  }
+  return (
+    <form action={saveJobSearch} className="grid gap-2 border-t pt-4">
+      <input type="hidden" name="skills" value={filters.skills.join("\n")} />
+      <input type="hidden" name="min_budget_cad" value={filters.budgetMin} />
+      <input type="hidden" name="budget_type" value={filters.budgetType} />
+      <input type="hidden" name="province" value={filters.province} />
+      <input type="hidden" name="remote_only" value={filters.remoteOnly ? "1" : ""} />
+      <Label htmlFor={`${idPrefix}-save-name`}>{t("alerts.name")}</Label>
+      <Input
+        id={`${idPrefix}-save-name`}
+        name="name"
+        required
+        maxLength={80}
+        placeholder={t("alerts.namePlaceholder")}
+        className="h-10"
+      />
+      <Button type="submit" className="h-10">
+        {t("alerts.save")}
+      </Button>
+    </form>
+  );
+}
+
+export function JobBoard({
+  jobsProp,
+  canSave = false,
+}: {
+  jobsProp?: Job[];
+  canSave?: boolean;
+}) {
   const t = useT();
   const locale = useLocale();
   const { status, retry } = useDirectoryStatus();
@@ -209,7 +251,7 @@ export function JobBoard({ jobsProp }: { jobsProp?: Job[] }) {
           {t("jobs.clear")}
         </Button>
       ) : null}
-      <SaveSearch filters={filters} />
+      <SaveSearch idPrefix={idPrefix} filters={filters} canSave={canSave} />
     </div>
   );
 

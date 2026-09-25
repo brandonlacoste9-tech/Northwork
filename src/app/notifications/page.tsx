@@ -62,11 +62,6 @@ export default async function NotificationsPage() {
         ) : null}
       </div>
       <p className="mt-3 text-sm text-muted-foreground">{t("alert.email")}</p>
-      <p className="mt-2 text-sm">
-        <Link href="/settings/alerts" className="font-medium text-primary hover:underline">
-          {t("alerts.manage")}
-        </Link>
-      </p>
       {rows.length === 0 ? (
         <p className="mt-8 text-muted-foreground">{t("alert.empty")}</p>
       ) : (

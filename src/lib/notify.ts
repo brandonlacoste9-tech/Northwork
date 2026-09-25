@@ -31,6 +31,34 @@ export async function notifyUser(
   }
 }
 
+/** Job-alert mail. No-ops when Resend is unset so in-site alerts still stand alone. */
+export async function sendAlertEmail(input: {
+  to: string | null | undefined;
+  subject: string;
+  text: string;
+}) {
+  const key = process.env.RESEND_API_KEY;
+  const from = process.env.NOTIFICATION_FROM;
+  if (!key || !from || !input.to || !input.to.includes("@")) return;
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: [input.to],
+        subject: input.subject,
+        text: input.text,
+      }),
+    });
+  } catch {
+    // Mail is optional.
+  }
+}
+
 async function sendNotificationEmail(
   supabase: Supabase,
   input: { userId: string; kind: AlertKind; body: string; href?: string | null },

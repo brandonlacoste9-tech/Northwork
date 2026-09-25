@@ -27,7 +27,7 @@ export default async function JobsPage() {
           </p>
         </div>
       </div>
-      <JobBoard jobsProp={jobsProp} />
+      <JobBoard jobsProp={jobsProp} canSave={isSupabaseConfigured()} />
     </main>
   );
 }

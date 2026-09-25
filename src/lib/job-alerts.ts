@@ -1,142 +1,166 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { getDb } from "@/lib/db";
+import { formatJobBudget } from "@/lib/format";
+import { sendAlertEmail } from "@/lib/notify";
 import { createClient } from "@/lib/supabase/server";
+
+type InstantRow = {
+  user_id: string;
+  email: string | null;
+  title: string;
+  budget_cad: number | string | null;
+  budget_max_cad: number | string | null;
+  budget_type: string | null;
+  href: string;
+  unsubscribe_token: string;
+};
+
+type DigestRow = InstantRow & { job_count: number };
 
 const SITE = "https://northernwork.ca";
 
-type InstantRow = {
-  recipient: string;
-  search_id: string;
-  token: string;
-  search_name: string;
-};
-
-type DigestRow = {
-  recipient: string;
-  token: string;
-  search_name: string;
-  job_id: string;
-  job_title: string;
-  job_budget: number | string | null;
-  job_budget_type: string | null;
-  job_location: string | null;
-};
-
-function budgetLine(amount: number | string | null, type: string | null) {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return "CAD";
-  const money = `$${Math.round(n).toLocaleString("en-CA")} CAD`;
-  return type === "hourly" ? `${money}/hr` : money;
+function money(row: { budget_cad: number | string | null; budget_max_cad: number | string | null; budget_type: string | null }) {
+  const min = Number(row.budget_cad ?? row.budget_max_cad ?? 0);
+  const max = Number(row.budget_max_cad ?? row.budget_cad ?? min);
+  const type = row.budget_type === "hourly" ? "hourly" : "fixed";
+  if (!Number.isFinite(min) || min <= 0) return "";
+  return formatJobBudget(min, Number.isFinite(max) ? max : min, type, "en");
 }
 
-async function sendEmail(to: string, subject: string, text: string) {
-  const key = process.env.RESEND_API_KEY;
-  const from = process.env.NOTIFICATION_FROM;
-  if (!key || !from || !to.includes("@")) return;
-  await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ from, to: [to], subject, text }),
-  });
+function footer(token: string) {
+  const off = `${SITE}/alerts/unsubscribe?token=${token}`;
+  const manage = `${SITE}/settings/alerts`;
+  return [
+    `Unsubscribe / Se désabonner: ${off}`,
+    `Manage alerts / Gérer les alertes: ${manage}`,
+  ].join("\n");
 }
 
-async function emailFor(admin: NonNullable<ReturnType<typeof createAdminClient>>, userId: string) {
-  const { data } = await admin.auth.admin.getUserById(userId);
-  return data.user?.email ?? null;
-}
-
-function unsubscribeLine(token: string, name: string) {
-  return `Unsubscribe from “${name}” / Se désabonner de « ${name} »: ${SITE}/alerts/unsubscribe?token=${token}`;
-}
-
-/** In-app alert as soon as a matching project is posted. Email when Resend is set. */
-export async function dispatchInstantJobAlerts(jobId: string) {
-  const admin = createAdminClient();
-  if (admin) {
-    const { data, error } = await admin.rpc("dispatch_saved_search_alerts", { target_job: jobId });
-    if (error || !data) return;
-    const rows = data as InstantRow[];
-    const { data: job } = await admin
-      .from("jobs")
-      .select("title, budget_cad, budget_type, location")
-      .eq("id", jobId)
-      .maybeSingle();
-    const title = (job as { title?: string } | null)?.title ?? "Project";
-    const budget = budgetLine(
-      (job as { budget_cad?: number | string | null } | null)?.budget_cad ?? null,
-      (job as { budget_type?: string | null } | null)?.budget_type ?? null,
-    );
-    const place = (job as { location?: string | null } | null)?.location ?? "Canada";
-    const byUser = new Map<string, InstantRow[]>();
-    for (const row of rows) {
-      const list = byUser.get(row.recipient) ?? [];
-      list.push(row);
-      byUser.set(row.recipient, list);
-    }
-    for (const [userId, matches] of byUser) {
-      const to = await emailFor(admin, userId);
-      if (!to) continue;
-      const link = `${SITE}/jobs/${jobId}`;
-      const text = [
-        `New project on Northernwork / Nouveau projet sur Northernwork`,
-        ``,
-        title,
-        `${budget} · ${place}`,
-        link,
-        ``,
-        ...matches.map((match) => unsubscribeLine(match.token, match.search_name)),
-        `Manage alerts / Gérer les alertes: ${SITE}/settings/alerts`,
-      ].join("\n");
-      await sendEmail(to, `Northernwork: ${title}`, text);
-    }
-    return;
-  }
-
-  const supabase = await createClient();
-  await supabase.rpc("dispatch_saved_search_alerts", { target_job: jobId });
-}
-
-/** Group the last day of daily matches into one email per person. */
-export async function dispatchDailyJobAlerts() {
-  const admin = createAdminClient();
-  if (!admin) return { users: 0 };
-  const { data, error } = await admin.rpc("dispatch_daily_job_alerts");
-  if (error || !data) return { users: 0 };
-  const rows = data as DigestRow[];
-  const byUser = new Map<string, DigestRow[]>();
+/** In-site alerts for instant saved searches, then email when Resend is set. */
+export async function dispatchInstantAlerts(jobId: string) {
+  if (!process.env.DATABASE_URL) return;
+  const rows = await getDb()<InstantRow[]>`
+    select * from private.dispatch_instant_alerts(${jobId}::uuid)
+  `;
   for (const row of rows) {
-    const list = byUser.get(row.recipient) ?? [];
-    list.push(row);
-    byUser.set(row.recipient, list);
-  }
-  for (const [userId, matches] of byUser) {
-    const to = await emailFor(admin, userId);
-    if (!to) continue;
-    const jobs = new Map<string, DigestRow>();
-    const searches = new Map<string, DigestRow>();
-    for (const match of matches) {
-      jobs.set(match.job_id, match);
-      searches.set(match.token, match);
-    }
-    const lines = [...jobs.values()].map((job) => {
-      return `- ${job.job_title} — ${budgetLine(job.job_budget, job.job_budget_type)} — ${job.job_location ?? "Canada"}\n  ${SITE}/jobs/${job.job_id}`;
+    const budget = money(row);
+    const link = `${SITE}${row.href}`;
+    const lines = [
+      row.title,
+      budget,
+      link,
+      "",
+      footer(row.unsubscribe_token),
+    ].filter((line) => line !== "");
+    await sendAlertEmail({
+      to: row.email,
+      subject: "Northernwork — new project / nouveau projet",
+      text: lines.join("\n"),
     });
-    const text = [
-      `${jobs.size} new project${jobs.size === 1 ? "" : "s"} match your Northernwork searches.`,
-      `${jobs.size} nouveau${jobs.size === 1 ? "" : "x"} projet${jobs.size === 1 ? "" : "s"} correspondent à vos recherches.`,
-      ``,
-      ...lines,
-      ``,
-      ...[...searches.values()].map((search) => unsubscribeLine(search.token, search.search_name)),
-      `Manage alerts / Gérer les alertes: ${SITE}/settings/alerts`,
-    ].join("\n");
-    await sendEmail(
-      to,
-      jobs.size === 1 ? "1 new Northernwork project" : `${jobs.size} new Northernwork projects`,
-      text,
-    );
   }
-  return { users: byUser.size };
+}
+
+/** Group the last 24 hours of daily matches into one note and one email per person. */
+export async function runDailyDigest() {
+  if (!process.env.DATABASE_URL) return { users: 0 };
+  const rows = await getDb()<DigestRow[]>`
+    select * from private.dispatch_daily_digests()
+  `;
+  const groups = new Map<string, DigestRow[]>();
+  for (const row of rows) {
+    const list = groups.get(row.user_id) ?? [];
+    list.push(row);
+    groups.set(row.user_id, list);
+  }
+  for (const list of groups.values()) {
+    const count = Number(list[0]?.job_count ?? list.length);
+    const lines = [
+      `${count} new jobs match your saved searches.`,
+      `${count} nouveaux projets correspondent à vos recherches.`,
+      "",
+      ...list.map((row) => {
+        const budget = money(row);
+        return [row.title, budget, `${SITE}${row.href}`].filter(Boolean).join("\n");
+      }),
+      "",
+      footer(list[0].unsubscribe_token),
+    ];
+    await sendAlertEmail({
+      to: list[0]?.email,
+      subject: "Northernwork — job alerts / alertes de projets",
+      text: lines.join("\n"),
+    });
+  }
+  return { users: groups.size };
+}
+
+export async function unsubscribeWithToken(token: string) {
+  if (!process.env.DATABASE_URL) return false;
+  if (!/^[0-9a-f-]{36}$/i.test(token)) return false;
+  const rows = await getDb()<{ ok: boolean }[]>`
+    select private.unsubscribe_alerts(${token}::uuid) as ok
+  `;
+  return Boolean(rows[0]?.ok);
+}
+
+async function requireUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login?next=/jobs");
+  return { supabase, user };
+}
+
+/** Save the current job-board filters for the signed-in freelancer. */
+export async function saveJobSearch(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  await supabase.from("profiles").upsert({ id: user.id }, { onConflict: "id", ignoreDuplicates: true });
+  const name = String(formData.get("name") ?? "").trim().slice(0, 80);
+  if (!name) redirect("/jobs");
+  const skills = String(formData.get("skills") ?? "")
+    .split("\n")
+    .map((skill) => skill.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+  const minRaw = String(formData.get("min_budget_cad") ?? "").trim();
+  const min = minRaw === "" ? null : Number(minRaw);
+  const budgetType = String(formData.get("budget_type") ?? "");
+  const province = String(formData.get("province") ?? "");
+  const { error } = await supabase.from("saved_searches").insert({
+    user_id: user.id,
+    name,
+    skills,
+    min_budget_cad: min !== null && Number.isFinite(min) && min >= 0 ? min : null,
+    budget_type: budgetType === "fixed" || budgetType === "hourly" ? budgetType : null,
+    province: province && province !== "all" ? province : null,
+    remote_only: formData.get("remote_only") === "1",
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings/alerts");
+  redirect("/settings/alerts");
+}
+
+export async function setAlertFrequency(formData: FormData) {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const frequency = String(formData.get("frequency") ?? "");
+  if (!["instant", "daily", "off"].includes(frequency)) redirect("/settings/alerts");
+  const { error } = await supabase
+    .from("saved_searches")
+    .update({ alert_frequency: frequency })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings/alerts");
+}
+
+export async function deleteSavedSearch(formData: FormData) {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const { error } = await supabase.from("saved_searches").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings/alerts");
 }

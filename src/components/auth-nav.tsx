@@ -54,17 +54,27 @@ export async function AuthNav({ stacked = false }: { stacked?: boolean }) {
         aria-label={t("nav.alerts")}
         className={
           stacked
-            ? "inline-flex items-center gap-2 rounded-lg px-3 py-3 text-base font-medium hover:bg-muted"
-            : "inline-flex items-center gap-1 text-sm font-medium text-foreground/80 hover:text-foreground"
+            ? "inline-flex items-center rounded-lg px-3 py-3 text-base font-medium hover:bg-muted"
+            : "relative inline-flex items-center text-foreground/80 hover:text-foreground"
         }
       >
-        <Bell className="size-4" aria-hidden="true" />
-        {stacked ? <span>{t("nav.alerts")}</span> : null}
+        <Bell className="size-5" aria-hidden="true" />
+        {stacked ? <span className="ml-2">{t("nav.alerts")}</span> : null}
         {(count ?? 0) > 0 ? (
           <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-xs text-primary-foreground">
             {count}
           </span>
         ) : null}
+      </Link>
+      <Link
+        href="/settings/alerts"
+        className={
+          stacked
+            ? "rounded-lg px-3 py-3 text-base font-medium hover:bg-muted"
+            : "text-sm font-medium text-foreground/80 hover:text-foreground"
+        }
+      >
+        {t("nav.jobAlerts")}
       </Link>
       <Link
         href="/messages"

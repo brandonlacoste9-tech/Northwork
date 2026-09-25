@@ -24,8 +24,6 @@ import { PortfolioManager } from "@/components/portfolio-manager";
 import { upsertProfile } from "@/lib/actions";
 import { isSupabaseConfigured, type ProfileRow } from "@/lib/backend";
 import { PROVINCES, type PortfolioItem } from "@/lib/data";
-import { translate, type MessageKey } from "@/lib/i18n";
-import { getLocale } from "@/lib/locale";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -73,9 +71,6 @@ export default async function ProfilePage() {
     url: item.url,
   }));
 
-  const locale = await getLocale();
-  const t = (key: MessageKey) => translate(locale, key);
-
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
       <p className="text-sm font-medium text-primary">northernwork.ca</p>
@@ -89,10 +84,6 @@ export default async function ProfilePage() {
       <p className="mt-4">
         <Link href="/settings/payouts" className="font-medium text-primary hover:underline">
           Set up CAD payouts
-        </Link>
-        <span aria-hidden="true"> · </span>
-        <Link href="/settings/alerts" className="font-medium text-primary hover:underline">
-          {t("alerts.manage")}
         </Link>
       </p>
       <Card className="mt-8">

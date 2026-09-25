@@ -3,8 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
-import { PROVINCES } from "@/lib/data";
-import { dispatchInstantJobAlerts } from "@/lib/job-alerts";
+import { dispatchInstantAlerts } from "@/lib/job-alerts";
 import { featureJob } from "@/lib/pitches";
 import { createClient } from "@/lib/supabase/server";
 import { notifyUser } from "@/lib/notify";
@@ -398,60 +397,12 @@ export async function createJob(formData: FormData) {
     // A featured-job alert must not block the post.
   }
   try {
-    await dispatchInstantJobAlerts(data.id);
+    await dispatchInstantAlerts(data.id);
   } catch {
     // A saved-search alert must not block the post.
   }
   revalidatePath("/jobs");
   redirect(`/jobs/${data.id}`);
-}
-
-export async function saveJobSearch(formData: FormData) {
-  const { supabase, user } = await requireUser();
-  await ensureOwnProfile(supabase, user.id);
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name || name.length > 80) return { error: "Name the search in 80 characters or less." };
-  const provinceRaw = String(formData.get("province") ?? "").trim();
-  const province =
-    provinceRaw && (PROVINCES as readonly string[]).includes(provinceRaw) ? provinceRaw : null;
-  const typeRaw = String(formData.get("budget_type") ?? "");
-  const budgetType = typeRaw === "fixed" || typeRaw === "hourly" ? typeRaw : null;
-  const remote = String(formData.get("remote_only") ?? "") === "1";
-  const { error } = await supabase.from("saved_searches").insert({
-    user_id: user.id,
-    name,
-    skills: parseSkills(formData.get("skills")),
-    min_budget_cad: parseMoney(formData.get("min_budget_cad")),
-    budget_type: budgetType,
-    province: remote ? null : province,
-    remote_only: remote,
-  });
-  if (error) return { error: error.message };
-  revalidatePath("/settings/alerts");
-  return { ok: true as const };
-}
-
-export async function updateSavedSearchFrequency(formData: FormData) {
-  const { supabase, user } = await requireUser();
-  const id = String(formData.get("id") ?? "");
-  const frequency = String(formData.get("alert_frequency") ?? "");
-  if (!id || !["instant", "daily", "off"].includes(frequency)) return;
-  const { error } = await supabase
-    .from("saved_searches")
-    .update({ alert_frequency: frequency })
-    .eq("id", id)
-    .eq("user_id", user.id);
-  if (error) throw new Error(error.message);
-  revalidatePath("/settings/alerts");
-}
-
-export async function deleteSavedSearch(formData: FormData) {
-  const { supabase, user } = await requireUser();
-  const id = String(formData.get("id") ?? "");
-  if (!id) return;
-  const { error } = await supabase.from("saved_searches").delete().eq("id", id).eq("user_id", user.id);
-  if (error) throw new Error(error.message);
-  revalidatePath("/settings/alerts");
 }
 
 function pitchTokensRequired(err: unknown) {

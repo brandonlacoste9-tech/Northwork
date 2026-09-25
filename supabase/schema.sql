@@ -1193,9 +1193,8 @@ where not exists (
     and t.reason = 'launch_grant'
 );
 
--- -------------------------------- saved searches and job alerts
--- Safe to re-run. Instant alerts are recorded when a project is posted.
--- The morning digest route records daily matches. Email is sent by the app.
+-- -------------------------------- saved-search job alerts
+-- Safe to re-run in the SQL editor. The pooler writes alert rows.
 
 create table if not exists public.saved_searches (
   id uuid primary key default gen_random_uuid(),
@@ -1203,23 +1202,15 @@ create table if not exists public.saved_searches (
   name text not null,
   skills text[] not null default '{}',
   min_budget_cad numeric(10, 2),
-  budget_type text,
+  budget_type text check (budget_type is null or budget_type in ('fixed', 'hourly')),
   province text,
   remote_only boolean not null default false,
   alert_frequency text not null default 'instant'
     check (alert_frequency in ('instant', 'daily', 'off')),
   unsubscribe_token uuid not null default gen_random_uuid(),
   created_at timestamptz not null default now(),
-  check (char_length(btrim(name)) between 1 and 80),
-  check (min_budget_cad is null or min_budget_cad >= 0),
-  check (budget_type is null or budget_type in ('fixed', 'hourly'))
+  unique (unsubscribe_token)
 );
-
-create unique index if not exists saved_searches_unsubscribe_idx
-  on public.saved_searches (unsubscribe_token);
-
-create index if not exists saved_searches_user_idx
-  on public.saved_searches (user_id, created_at desc);
 
 create table if not exists public.job_alerts_sent (
   id uuid primary key default gen_random_uuid(),
@@ -1269,262 +1260,260 @@ create policy "job_alerts_sent: own read"
     )
   );
 
+create index if not exists saved_searches_user_idx
+  on public.saved_searches (user_id, created_at desc);
+create index if not exists job_alerts_sent_job_idx
+  on public.job_alerts_sent (job_id);
+
+revoke all on table public.saved_searches from anon, authenticated;
 grant select, insert, update, delete on table public.saved_searches to authenticated;
+revoke all on table public.job_alerts_sent from anon, authenticated;
 grant select on table public.job_alerts_sent to authenticated;
 
-create or replace function public.location_province(location text)
-returns text
-language plpgsql
-immutable
-set search_path = ''
-as $$
-declare
-  token text;
-  folded text;
-begin
-  if location is null or btrim(location) = '' then
-    return null;
-  end if;
-  if location ~* 'remote' or location ~* 'distance' then
-    return null;
-  end if;
-  token := btrim(split_part(location, ',', array_length(string_to_array(location, ','), 1)));
-  folded := translate(lower(token), 'éèêëàâäîïôöùûüç', 'eeeeaaaiioouuuc');
-  return case folded
-    when 'ab' then 'Alberta'
-    when 'alberta' then 'Alberta'
-    when 'bc' then 'British Columbia'
-    when 'british columbia' then 'British Columbia'
-    when 'colombie-britannique' then 'British Columbia'
-    when 'mb' then 'Manitoba'
-    when 'manitoba' then 'Manitoba'
-    when 'nb' then 'New Brunswick'
-    when 'new brunswick' then 'New Brunswick'
-    when 'nouveau-brunswick' then 'New Brunswick'
-    when 'nl' then 'Newfoundland and Labrador'
-    when 'newfoundland and labrador' then 'Newfoundland and Labrador'
-    when 'terre-neuve-et-labrador' then 'Newfoundland and Labrador'
-    when 'nt' then 'Northwest Territories'
-    when 'northwest territories' then 'Northwest Territories'
-    when 'territoires du nord-ouest' then 'Northwest Territories'
-    when 'ns' then 'Nova Scotia'
-    when 'nova scotia' then 'Nova Scotia'
-    when 'nouvelle-ecosse' then 'Nova Scotia'
-    when 'nu' then 'Nunavut'
-    when 'nunavut' then 'Nunavut'
-    when 'on' then 'Ontario'
-    when 'ontario' then 'Ontario'
-    when 'pe' then 'Prince Edward Island'
-    when 'pei' then 'Prince Edward Island'
-    when 'prince edward island' then 'Prince Edward Island'
-    when 'ile-du-prince-edouard' then 'Prince Edward Island'
-    when 'qc' then 'Quebec'
-    when 'quebec' then 'Quebec'
-    when 'sk' then 'Saskatchewan'
-    when 'saskatchewan' then 'Saskatchewan'
-    when 'yt' then 'Yukon'
-    when 'yukon' then 'Yukon'
-    else null
-  end;
-end;
-$$;
-
-create or replace function public.saved_search_matches(
-  search_skills text[],
-  min_budget numeric,
-  search_type text,
-  search_province text,
-  search_remote boolean,
+create or replace function private.job_matches_search(
   job_skills text[],
   job_budget numeric,
-  job_budget_max numeric,
-  job_type text,
-  job_location text
-)
-returns boolean
+  job_budget_type text,
+  job_location text,
+  search_skills text[],
+  search_min numeric,
+  search_budget_type text,
+  search_province text,
+  search_remote boolean
+) returns boolean
 language sql
 immutable
-set search_path = ''
 as $$
-  select coalesce(
-    (coalesce(array_length(search_skills, 1), 0) = 0 or search_skills && coalesce(job_skills, '{}'))
-    and (min_budget is null or coalesce(job_budget_max, job_budget, 0) >= min_budget)
-    and (search_type is null or search_type = job_type)
+  select
+    (
+      coalesce(array_length(search_skills, 1), 0) = 0
+      or coalesce(job_skills, '{}') && search_skills
+    )
+    and (search_min is null or coalesce(job_budget, 0) >= search_min)
+    and (
+      search_budget_type is null
+      or coalesce(job_budget_type, 'fixed') = search_budget_type
+    )
     and (
       case
-        when coalesce(search_remote, false) then
-          coalesce(job_location, '') ~* 'remote' or coalesce(job_location, '') ~* 'distance'
-        when search_province is not null then
-          public.location_province(job_location) = search_province
+        when search_remote then job_location = 'Remote in Canada'
+        when search_province is not null and btrim(search_province) <> ''
+          then job_location = search_province
         else true
       end
-    ),
-    false
-  );
+    );
 $$;
 
--- Records instant matches for one open project. The job's client or the
--- service role may call it. Only the service role receives recipient rows,
--- so a client cannot list who saved a search.
-create or replace function public.dispatch_saved_search_alerts(target_job uuid)
-returns table (recipient uuid, search_id uuid, token uuid, search_name text)
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  found public.jobs%rowtype;
-  hits uuid[];
-begin
-  select * into found
-  from public.jobs j
-  where j.id = target_job
-    and j.status = 'open';
-  if found.id is null then
-    return;
-  end if;
-  if coalesce(auth.role(), '') <> 'service_role'
-     and (auth.uid() is null or auth.uid() <> found.client_id) then
-    return;
-  end if;
-
-  with ins as (
-    insert into public.job_alerts_sent (saved_search_id, job_id)
-    select s.id, found.id
-    from public.saved_searches s
-    join public.profiles p on p.id = s.user_id
-    where s.alert_frequency = 'instant'
-      and s.user_id <> found.client_id
-      and coalesce(p.is_sample, false) = false
-      and public.saved_search_matches(
-        s.skills, s.min_budget_cad, s.budget_type, s.province, s.remote_only,
-        found.skills, found.budget_cad, found.budget_max_cad, found.budget_type, found.location
-      )
-    on conflict (saved_search_id, job_id) do nothing
-    returning saved_search_id
-  )
-  select coalesce(array_agg(ins.saved_search_id), '{}') into hits from ins;
-
-  insert into public.notifications (user_id, kind, body, href)
-  select distinct s.user_id, 'job_alert', left(coalesce(found.title, 'Project'), 200), '/jobs/' || found.id::text
-  from public.saved_searches s
-  where s.id = any (hits);
-
-  if coalesce(auth.role(), '') = 'service_role' then
-    return query
-    select s.user_id, s.id, s.unsubscribe_token, s.name
-    from public.saved_searches s
-    where s.id = any (hits);
-  end if;
-end;
-$$;
-
--- One row per new daily match from the last 24 hours. Service role only.
-create or replace function public.dispatch_daily_job_alerts()
+-- Record one instant alert per search. A second call for the same pair does nothing.
+create or replace function private.dispatch_instant_alerts(target_job uuid)
 returns table (
-  recipient uuid,
-  token uuid,
-  search_name text,
-  job_id uuid,
-  job_title text,
-  job_budget numeric,
-  job_budget_type text,
-  job_location text
+  user_id uuid,
+  email text,
+  title text,
+  budget_cad numeric,
+  budget_max_cad numeric,
+  budget_type text,
+  href text,
+  unsubscribe_token uuid
 )
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  j public.jobs%rowtype;
+  s public.saved_searches%rowtype;
+  addr text;
 begin
-  if coalesce(auth.role(), '') <> 'service_role' then
+  select * into j from public.jobs where id = target_job;
+  if j.id is null or j.status is distinct from 'open' then
     return;
   end if;
 
-  return query
-  with ins as (
-    insert into public.job_alerts_sent (saved_search_id, job_id)
-    select s.id, j.id
-    from public.saved_searches s
-    join public.profiles p on p.id = s.user_id
-    join public.jobs j
-      on j.status = 'open'
-     and j.created_at >= now() - interval '24 hours'
-    where s.alert_frequency = 'daily'
-      and s.user_id <> j.client_id
-      and coalesce(p.is_sample, false) = false
-      and public.saved_search_matches(
-        s.skills, s.min_budget_cad, s.budget_type, s.province, s.remote_only,
-        j.skills, j.budget_cad, j.budget_max_cad, j.budget_type, j.location
+  for s in
+    select ss.*
+    from public.saved_searches ss
+    where ss.alert_frequency = 'instant'
+      and ss.user_id is distinct from j.client_id
+      and private.job_matches_search(
+        j.skills,
+        coalesce(j.budget_max_cad, j.budget_cad),
+        j.budget_type,
+        j.location,
+        ss.skills,
+        ss.min_budget_cad,
+        ss.budget_type,
+        ss.province,
+        ss.remote_only
       )
-    on conflict (saved_search_id, job_id) do nothing
-    returning saved_search_id, job_id
-  ),
-  noted as (
-    insert into public.notifications (user_id, kind, body, href)
-    select s.user_id,
-      'job_digest',
-      left(count(distinct ins.job_id)::text, 20),
-      '/jobs'
-    from ins
-    join public.saved_searches s on s.id = ins.saved_search_id
-    group by s.user_id
-    returning user_id
-  )
-  select s.user_id,
-    s.unsubscribe_token,
-    s.name,
-    j.id,
-    j.title,
-    j.budget_cad,
-    j.budget_type,
-    j.location
-  from ins
-  join public.saved_searches s on s.id = ins.saved_search_id
-  join public.jobs j on j.id = ins.job_id
-  where (select count(*) from noted) >= 0;
+  loop
+    insert into public.job_alerts_sent (saved_search_id, job_id)
+    values (s.id, j.id)
+    on conflict (saved_search_id, job_id) do nothing;
+    if not found then
+      continue;
+    end if;
+
+    if exists (select 1 from public.profiles p where p.id = s.user_id) then
+      insert into public.notifications (user_id, kind, body, href)
+      values (s.user_id, 'job_alert', left(j.title, 200), '/jobs/' || j.id::text);
+    end if;
+
+    select u.email into addr from auth.users u where u.id = s.user_id;
+
+    user_id := s.user_id;
+    email := addr;
+    title := j.title;
+    budget_cad := j.budget_cad;
+    budget_max_cad := j.budget_max_cad;
+    budget_type := j.budget_type;
+    href := '/jobs/' || j.id::text;
+    unsubscribe_token := s.unsubscribe_token;
+    return next;
+  end loop;
 end;
 $$;
 
-create or replace function public.unsubscribe_job_alert(token uuid)
+-- One in-site note per freelancer for every daily match in the last 24 hours.
+create or replace function private.dispatch_daily_digests()
+returns table (
+  user_id uuid,
+  email text,
+  job_count integer,
+  title text,
+  budget_cad numeric,
+  budget_max_cad numeric,
+  budget_type text,
+  href text,
+  unsubscribe_token uuid
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  rec record;
+  owner uuid;
+  note text;
+  n integer;
+  token uuid;
+  addr text;
+begin
+  create temporary table if not exists _digest_boot (x int) on commit drop;
+  drop table if exists pg_temp._digest_matches;
+  create temporary table pg_temp._digest_matches (
+    user_id uuid,
+    search_id uuid,
+    job_id uuid,
+    title text,
+    budget_cad numeric,
+    budget_max_cad numeric,
+    budget_type text
+  ) on commit drop;
+  drop table if exists pg_temp._digest_boot;
+
+  insert into pg_temp._digest_matches (user_id, search_id, job_id, title, budget_cad, budget_max_cad, budget_type)
+  select ss.user_id, ss.id, j.id, j.title, j.budget_cad, j.budget_max_cad, j.budget_type
+  from public.saved_searches ss
+  join public.jobs j
+    on j.status = 'open'
+   and j.created_at >= now() - interval '24 hours'
+   and j.client_id is distinct from ss.user_id
+  where ss.alert_frequency = 'daily'
+    and private.job_matches_search(
+      j.skills,
+      coalesce(j.budget_max_cad, j.budget_cad),
+      j.budget_type,
+      j.location,
+      ss.skills,
+      ss.min_budget_cad,
+      ss.budget_type,
+      ss.province,
+      ss.remote_only
+    )
+    and not exists (
+      select 1 from public.job_alerts_sent a
+      where a.saved_search_id = ss.id and a.job_id = j.id
+    );
+
+  insert into public.job_alerts_sent (saved_search_id, job_id)
+  select search_id, job_id from pg_temp._digest_matches
+  on conflict (saved_search_id, job_id) do nothing;
+
+  for owner in select distinct m.user_id from pg_temp._digest_matches m
+  loop
+    select count(distinct m.job_id) into n from pg_temp._digest_matches m where m.user_id = owner;
+    select string_agg(x.title, E'\n' order by x.title)
+      into note
+    from (
+      select distinct left(m.title, 120) as title
+      from pg_temp._digest_matches m
+      where m.user_id = owner
+    ) x;
+    select ss.unsubscribe_token into token
+    from public.saved_searches ss
+    where ss.user_id = owner
+    order by ss.created_at
+    limit 1;
+    select u.email into addr from auth.users u where u.id = owner;
+
+    if exists (select 1 from public.profiles p where p.id = owner) then
+      insert into public.notifications (user_id, kind, body, href)
+      values (
+        owner,
+        'job_digest',
+        left(n::text || E'\n' || coalesce(note, ''), 500),
+        '/jobs'
+      );
+    end if;
+
+    return query
+      select
+        owner,
+        addr,
+        n,
+        m.title,
+        m.budget_cad,
+        m.budget_max_cad,
+        m.budget_type,
+        '/jobs/' || m.job_id::text,
+        token
+      from (
+        select distinct on (d.job_id)
+          d.job_id, d.title, d.budget_cad, d.budget_max_cad, d.budget_type
+        from pg_temp._digest_matches d
+        where d.user_id = owner
+        order by d.job_id, d.title
+      ) m;
+  end loop;
+end;
+$$;
+
+create or replace function private.unsubscribe_alerts(token uuid)
 returns boolean
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
-  updated integer;
+  owner uuid;
 begin
-  if token is null then
+  select s.user_id into owner
+  from public.saved_searches s
+  where s.unsubscribe_token = token;
+  if owner is null then
     return false;
   end if;
   update public.saved_searches
-     set alert_frequency = 'off'
-   where unsubscribe_token = token
-     and alert_frequency <> 'off';
-  get diagnostics updated = row_count;
-  if updated > 0 then
-    return true;
-  end if;
-  return exists (
-    select 1 from public.saved_searches s where s.unsubscribe_token = token
-  );
+    set alert_frequency = 'off'
+    where user_id = owner;
+  return true;
 end;
 $$;
 
-revoke all on function public.location_province(text) from public;
-grant execute on function public.location_province(text) to anon, authenticated, service_role;
-
-revoke all on function public.saved_search_matches(text[], numeric, text, text, boolean, text[], numeric, numeric, text, text) from public;
-grant execute on function public.saved_search_matches(text[], numeric, text, text, boolean, text[], numeric, numeric, text, text) to anon, authenticated, service_role;
-
-revoke all on function public.dispatch_saved_search_alerts(uuid) from public;
-grant execute on function public.dispatch_saved_search_alerts(uuid) to authenticated, service_role;
-
-revoke all on function public.dispatch_daily_job_alerts() from public, anon, authenticated;
-grant execute on function public.dispatch_daily_job_alerts() to service_role;
-
-revoke all on function public.unsubscribe_job_alert(uuid) from public;
-grant execute on function public.unsubscribe_job_alert(uuid) to anon, authenticated, service_role;
-
+revoke all on function private.job_matches_search(text[], numeric, text, text, text[], numeric, text, text, boolean) from public, anon, authenticated;
+revoke all on function private.dispatch_instant_alerts(uuid) from public, anon, authenticated;
+revoke all on function private.dispatch_daily_digests() from public, anon, authenticated;
+revoke all on function private.unsubscribe_alerts(uuid) from public, anon, authenticated;
 
 

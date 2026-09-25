@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { isSupabaseConfigured } from "@/lib/backend";
 import { createClient } from "@/lib/supabase/client";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -131,5 +131,23 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-md px-4 py-16">
+          <Card>
+            <CardContent className="p-8 text-sm text-muted-foreground">
+              Loading…
+            </CardContent>
+          </Card>
+        </main>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

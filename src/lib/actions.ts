@@ -278,7 +278,13 @@ export async function createJob(formData: FormData) {
       title: String(formData.get("title") ?? "").trim(),
       description: String(formData.get("description") ?? "").trim(),
       budget_cad: parseMoney(formData.get("budget")),
-      budget_type: "fixed",
+      budget_max_cad: (() => {
+        const min = parseMoney(formData.get("budget"));
+        const max = parseMoney(formData.get("budget_max"));
+        return min != null && max != null && max >= min ? max : null;
+      })(),
+      budget_type: String(formData.get("budget_type") ?? "fixed") === "hourly" ? "hourly" : "fixed",
+      duration: String(formData.get("duration") ?? "").trim() || null,
       skills: parseSkillsMulti(formData, "skills"),
       location: String(formData.get("location") ?? "").trim() || null,
     })
@@ -465,4 +471,64 @@ export async function uploadAvatar(formData: FormData) {
   revalidatePath("/talent");
   revalidatePath(`/talent/${user.id}`);
   return { url: avatarUrl };
+}
+
+/** Add one portfolio piece. Image is optional and stored under portfolio/{user-id}/. */
+export async function addPortfolioItem(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  await ensureOwnProfile(supabase, user.id);
+
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) return { error: "Add a title." };
+  if (title.length > 120) return { error: "Keep the title under 120 characters." };
+
+  const rawUrl = String(formData.get("url") ?? "").trim();
+  if (rawUrl && !/^https?:\/\//i.test(rawUrl)) {
+    return { error: "The link must start with http:// or https://." };
+  }
+
+  const { count } = await supabase
+    .from("portfolio_items")
+    .select("id", { count: "exact", head: true })
+    .eq("freelancer_id", user.id);
+  if ((count ?? 0) >= 12) return { error: "Twelve projects is the maximum." };
+
+  let imageUrl: string | null = null;
+  const file = formData.get("image");
+  if (file instanceof File && file.size > 0) {
+    if (file.size > 5 * 1024 * 1024) return { error: "Images must be 5 MB or smaller." };
+    const ext = AVATAR_TYPES[file.type];
+    if (!ext) return { error: "Use a JPG, PNG, or WebP image." };
+    const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from("portfolio")
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (uploadError) return { error: uploadError.message };
+    const { data } = supabase.storage.from("portfolio").getPublicUrl(path);
+    imageUrl = data.publicUrl;
+  }
+
+  const { error } = await supabase.from("portfolio_items").insert({
+    freelancer_id: user.id,
+    title,
+    image_url: imageUrl,
+    url: rawUrl || null,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/profile");
+  revalidatePath(`/talent/${user.id}`);
+  return { ok: true };
+}
+
+export async function deletePortfolioItem(id: string) {
+  const { supabase, user } = await requireUser();
+  const { error } = await supabase
+    .from("portfolio_items")
+    .delete()
+    .eq("id", id)
+    .eq("freelancer_id", user.id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/profile");
+  revalidatePath(`/talent/${user.id}`);
 }

@@ -19,7 +19,7 @@ import { isSupabaseConfigured } from "@/lib/backend";
 import { useMarketplace } from "@/lib/marketplace";
 import { cn } from "cn";
 
-type FieldKey = "title" | "description" | "budget" | "skills" | "location";
+type FieldKey = "title" | "description" | "budget" | "budgetMax" | "skills" | "location";
 
 export function PostProjectForm() {
   const router = useRouter();
@@ -27,6 +27,9 @@ export function PostProjectForm() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [budget, setBudget] = useState("");
+  const [budgetMax, setBudgetMax] = useState("");
+  const [budgetType, setBudgetType] = useState<"fixed" | "hourly">("fixed");
+  const [duration, setDuration] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
   const [location, setLocation] = useState<string>("");
   const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({});
@@ -49,6 +52,7 @@ export function PostProjectForm() {
     event.preventDefault();
     const nextErrors: Partial<Record<FieldKey, string>> = {};
     const amount = Number(budget);
+    const maxAmount = budgetMax.trim() === "" ? null : Number(budgetMax);
 
     if (!title.trim()) nextErrors.title = "Add a project title.";
     if (!description.trim()) nextErrors.description = "Describe the work.";
@@ -56,12 +60,15 @@ export function PostProjectForm() {
     else if (!Number.isFinite(amount) || amount <= 0) {
       nextErrors.budget = "Enter a budget greater than zero.";
     }
+    if (maxAmount !== null && (!Number.isFinite(maxAmount) || maxAmount < amount)) {
+      nextErrors.budgetMax = "The top of the range must be at least the minimum.";
+    }
     if (skills.length === 0) nextErrors.skills = "Choose at least one skill.";
     if (!location) nextErrors.location = "Choose a province or remote in Canada.";
 
     setErrors(nextErrors);
     const firstInvalid = (
-      ["title", "description", "budget", "skills", "location"] as const
+      ["title", "description", "budget", "budgetMax", "skills", "location"] as const
     ).find((key) => nextErrors[key]);
     if (firstInvalid) {
       document.getElementById(firstInvalid)?.focus();
@@ -77,6 +84,9 @@ export function PostProjectForm() {
         formData.set("title", title.trim());
         formData.set("description", description.trim());
         formData.set("budget", String(Math.round(amount)));
+        if (maxAmount !== null) formData.set("budget_max", String(Math.round(maxAmount)));
+        formData.set("budget_type", budgetType);
+        if (duration.trim()) formData.set("duration", duration.trim());
         skills.forEach((skill) => formData.append("skills", skill));
         formData.set("location", location);
         await createJob(formData);
@@ -90,6 +100,9 @@ export function PostProjectForm() {
       title,
       description,
       budget: Math.round(amount),
+      budgetMax: maxAmount === null ? undefined : Math.round(maxAmount),
+      budgetType,
+      duration: duration.trim(),
       skills,
       location: location as WorkLocation,
     });
@@ -163,9 +176,51 @@ export function PostProjectForm() {
           </p>
         ) : (
           <p className="text-sm text-muted-foreground">
-            A single amount in Canadian dollars. Ranges are not required.
+            Minimum in Canadian dollars. Add a top of range if the budget is a band.
           </p>
         )}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="budgetMax">Budget top (CAD, optional)</Label>
+          <Input
+            id="budgetMax"
+            inputMode="decimal"
+            value={budgetMax}
+            onChange={(event) => {
+              setBudgetMax(event.target.value);
+              clearError("budgetMax");
+            }}
+            aria-invalid={Boolean(errors.budgetMax)}
+            placeholder="18000"
+            className="h-10"
+          />
+          {errors.budgetMax ? (
+            <p className="text-sm text-destructive">{errors.budgetMax}</p>
+          ) : null}
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="budget-type">Budget type</Label>
+          <Select value={budgetType} onValueChange={(value) => setBudgetType(value as "fixed" | "hourly")}>
+            <SelectTrigger id="budget-type" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="fixed">Fixed</SelectItem>
+              <SelectItem value="hourly">Hourly</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="duration">Estimated duration (optional)</Label>
+        <Input
+          id="duration"
+          value={duration}
+          onChange={(event) => setDuration(event.target.value)}
+          placeholder="About 6 weeks"
+          className="h-10"
+        />
       </div>
       <fieldset
         id="skills"

@@ -54,6 +54,14 @@ export type Availability =
   | "Booking in two weeks"
   | "Limited";
 
+export type PortfolioItem = {
+  id: string;
+  title: string;
+  imageUrl?: string | null;
+  url?: string | null;
+  summary?: string | null;
+};
+
 export type Freelancer = {
   id: string;
   name: string;
@@ -66,7 +74,15 @@ export type Freelancer = {
   bio: string;
   sampleWork: { title: string; summary: string }[];
   avatarUrl?: string | null;
+  rating?: number | null;
+  reviewCount?: number;
+  completedCount?: number;
+  memberSince?: string | null;
+  verified?: boolean;
+  portfolio?: PortfolioItem[];
 };
+
+export type BudgetType = "fixed" | "hourly";
 
 export type Job = {
   id: string;
@@ -74,12 +90,18 @@ export type Job = {
   description: string[];
   budgetMin: number;
   budgetMax: number;
+  budgetType?: BudgetType;
+  duration?: string | null;
   location: WorkLocation;
   skills: string[];
   postedAt: number;
   postedLabel: string;
   client: string;
   postedLocally?: boolean;
+  proposalCount?: number;
+  clientVerified?: boolean;
+  clientMemberSince?: string | null;
+  clientOpenJobs?: number;
 };
 
 const posted = Date.parse("2026-09-25T12:00:00-04:00");
@@ -602,6 +624,101 @@ export const seedJobs: Job[] = [
   },
 ];
 
+const sampleTrust: Array<Pick<Freelancer, "rating" | "reviewCount" | "completedCount" | "memberSince">> = [
+  { rating: 4.9, reviewCount: 11, completedCount: 14, memberSince: "2022-06-01" },
+  { rating: 4.7, reviewCount: 6, completedCount: 9, memberSince: "2023-01-15" },
+  { rating: 5, reviewCount: 4, completedCount: 4, memberSince: "2024-02-01" },
+  { rating: 4.4, reviewCount: 9, completedCount: 12, memberSince: "2021-11-01" },
+  { rating: 4.8, reviewCount: 3, completedCount: 3, memberSince: "2023-08-01" },
+  { rating: 4.2, reviewCount: 8, completedCount: 7, memberSince: "2022-03-01" },
+  { rating: 4.6, reviewCount: 2, completedCount: 2, memberSince: "2025-01-01" },
+  { rating: 4.5, reviewCount: 5, completedCount: 6, memberSince: "2020-09-01" },
+  { rating: 4.8, reviewCount: 7, completedCount: 8, memberSince: "2023-04-01" },
+  { rating: 4.1, reviewCount: 1, completedCount: 1, memberSince: "2025-06-01" },
+  { rating: 4.9, reviewCount: 10, completedCount: 11, memberSince: "2019-05-01" },
+  { rating: 4.3, reviewCount: 4, completedCount: 5, memberSince: "2024-07-01" },
+  { rating: 4.7, reviewCount: 6, completedCount: 6, memberSince: "2022-12-01" },
+  { rating: 4.6, reviewCount: 8, completedCount: 9, memberSince: "2021-02-01" },
+  { rating: 4.4, reviewCount: 3, completedCount: 4, memberSince: "2023-10-01" },
+  { rating: 5, reviewCount: 2, completedCount: 2, memberSince: "2024-11-01" },
+  { rating: 4.5, reviewCount: 5, completedCount: 7, memberSince: "2022-08-01" },
+];
+
+freelancers.forEach((person, index) => {
+  Object.assign(person, sampleTrust[index], { verified: true });
+});
+
+const jobFacts: Record<string, Partial<Job>> = {
+  "river-pine-portal": {
+    budgetType: "fixed",
+    duration: "8–10 weeks",
+    proposalCount: 4,
+    clientVerified: true,
+    clientMemberSince: "2021-03-01",
+    clientOpenJobs: 1,
+  },
+  "prairie-harvest": {
+    budgetType: "fixed",
+    duration: "3 weeks",
+    proposalCount: 2,
+    clientVerified: true,
+    clientMemberSince: "2022-09-01",
+    clientOpenJobs: 1,
+  },
+  "cape-fir-shop": {
+    budgetType: "hourly",
+    duration: "About 80 hours",
+    proposalCount: 3,
+    clientVerified: true,
+    clientMemberSince: "2024-02-01",
+    clientOpenJobs: 1,
+  },
+  "northbank-housing": {
+    budgetType: "fixed",
+    duration: "12 weeks",
+    proposalCount: 1,
+    clientVerified: true,
+    clientMemberSince: "2020-11-01",
+    clientOpenJobs: 1,
+  },
+  "yukon-routes": {
+    budgetType: "fixed",
+    duration: "6 weeks",
+    proposalCount: 2,
+    clientVerified: true,
+    clientMemberSince: "2019-05-01",
+    clientOpenJobs: 1,
+  },
+  "island-access": {
+    budgetType: "fixed",
+    duration: "2 weeks",
+    proposalCount: 5,
+    clientVerified: true,
+    clientMemberSince: "2023-07-01",
+    clientOpenJobs: 1,
+  },
+  "mile-end-tools": {
+    budgetType: "fixed",
+    duration: "3 months",
+    proposalCount: 3,
+    clientVerified: true,
+    clientMemberSince: "2018-04-01",
+    clientOpenJobs: 1,
+  },
+  "red-river-report": {
+    budgetType: "fixed",
+    duration: "5 weeks",
+    proposalCount: 1,
+    clientVerified: true,
+    clientMemberSince: "2022-01-01",
+    clientOpenJobs: 1,
+  },
+};
+
+for (const job of seedJobs) {
+  Object.assign(job, jobFacts[job.id]);
+}
+
 export function getFreelancer(id: string) {
   return freelancers.find((person) => person.id === id);
 }
@@ -639,19 +756,56 @@ export function filterFreelancers(
 
 export function filterJobs(
   jobs: Job[],
-  filters: { search: string; location: string },
+  filters: {
+    search: string;
+    province: string;
+    remoteOnly: boolean;
+    budgetMin: string;
+    budgetMax: string;
+    budgetType: "all" | BudgetType;
+    skills: string[];
+    sort: "newest" | "budget";
+  },
 ) {
   const needle = filters.search.trim().toLowerCase();
-  return jobs.filter((job) => {
-    if (filters.location !== "all" && job.location !== filters.location) {
+  const min =
+    filters.budgetMin.trim() === "" ? null : Number(filters.budgetMin);
+  const max =
+    filters.budgetMax.trim() === "" ? null : Number(filters.budgetMax);
+  const filtered = jobs.filter((job) => {
+    if (filters.remoteOnly && job.location !== REMOTE_IN_CANADA) return false;
+    if (
+      !filters.remoteOnly &&
+      filters.province !== "all" &&
+      job.location !== filters.province
+    ) {
       return false;
     }
+    const budgetType = job.budgetType ?? "fixed";
+    if (filters.budgetType !== "all" && budgetType !== filters.budgetType) {
+      return false;
+    }
+    if (
+      filters.skills.length > 0 &&
+      !filters.skills.some((skill) => job.skills.includes(skill))
+    ) {
+      return false;
+    }
+    if (min !== null && Number.isFinite(min) && job.budgetMax < min) return false;
+    if (max !== null && Number.isFinite(max) && job.budgetMin > max) return false;
     if (!needle) return true;
     const haystack = [job.title, job.client, ...job.skills]
       .join(" ")
       .toLowerCase();
     return haystack.includes(needle);
   });
+  const sorted = [...filtered];
+  if (filters.sort === "budget") {
+    sorted.sort((a, b) => b.budgetMax - a.budgetMax || b.postedAt - a.postedAt);
+  } else {
+    sorted.sort((a, b) => b.postedAt - a.postedAt);
+  }
+  return sorted;
 }
 
 export function initials(name: string) {

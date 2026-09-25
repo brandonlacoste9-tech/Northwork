@@ -35,14 +35,17 @@ Apply `supabase/schema.sql` in the Supabase SQL editor (or with the pooler). It 
 ## Tables
 
 - `profiles` — public freelancer profiles, including `avatar_url` and `stripe_account_id`.
-- `jobs` — projects in CAD. Status is `open`, `in_progress`, or `closed`.
+- `jobs` — projects in CAD. Status is `open`, `in_progress`, or `closed`. Optional `budget_max_cad` and `duration`.
 - `proposals` — one pitch per freelancer per job (`pending`, `accepted`, `declined`).
 - `conversations` and `messages` — one thread per accepted pitch. Messages are realtime.
 - `conversation_reads` — unread counts in the inbox.
 - `reviews` — one review per person per closed job, rating 1–5.
 - `payments` — escrow rows (`held`, `released`, `refunded`).
-- `stripe_events` — processed webhook event ids, so a replay does not apply twice.
-- Storage bucket `avatars` — public read, writes only under `{user-id}/`.
+- `stripe_events` — processed webhook event ids, so a replay does not apply twice. RLS is on and there are no policies, so only the database connection used by the webhook can write it.
+- `portfolio_items` — work samples on a freelancer profile. Public read, owner write.
+- Storage buckets `avatars` and `portfolio` — public read, writes only under `{user-id}/`.
+
+`proposal_counts` and `completed_project_counts` are security-definer functions so the board can show pitch and completed counts without opening private rows.
 
 ## Messaging
 
@@ -68,12 +71,12 @@ Google Cloud and the Supabase Google provider still need a real client id and se
 
 ## Email confirmation
 
-Signup requires email confirmation (`mailer_autoconfirm` is false). A signup attempt from this environment returned `email rate limit exceeded`, so the confirm-then-login walkthrough could not be finished. Confirmation was left on. Email templates were not restyled; this environment has no Supabase Management API token.
+Signup requires email confirmation (`mailer_autoconfirm` is false). The confirmation, magic-link, recovery, and invite templates still use Supabase's default copy. The Management API refused a restyle: email template changes need a paid plan or custom SMTP, and this project has neither. A signup attempt from this environment previously returned `email rate limit exceeded`; the project still allows only 2 confirmation emails per hour, so a full confirm-then-login walkthrough can fail until that window resets. Confirmation was left on.
 
 ## What you can do
 
-- Browse talent and open projects. Filter by province, skill, and CAD rate.
-- Sign up, confirm your email, and publish a profile with a photo.
+- Browse talent and open projects. Filter projects by CAD budget, fixed or hourly, skill, province, and remote inside Canada. Sort by newest or budget.
+- Sign up, confirm your email, and publish a profile with a photo and work samples.
 - Post a project, pitch, and accept a pitch into a live thread.
 - Close a finished project and leave one review each.
 - Connect payouts and, with Stripe test keys, fund, release, or refund escrow.

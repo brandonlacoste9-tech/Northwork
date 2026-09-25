@@ -7,12 +7,15 @@ import {
   useMemo,
   useState,
 } from "react";
-import { seedJobs, type Job, type WorkLocation } from "@/lib/data";
+import { seedJobs, type BudgetType, type Job, type WorkLocation } from "@/lib/data";
 
 export type NewJobInput = {
   title: string;
   description: string;
   budget: number;
+  budgetMax?: number;
+  budgetType?: BudgetType;
+  duration?: string;
   skills: string[];
   location: WorkLocation;
 };
@@ -38,6 +41,7 @@ export function MarketplaceProvider({
   const [posted, setPosted] = useState<Job[]>([]);
 
   const addJob = useCallback((input: NewJobInput) => {
+    const max = input.budgetMax && input.budgetMax >= input.budget ? input.budgetMax : input.budget;
     const job: Job = {
       id: `local-${crypto.randomUUID()}`,
       title: input.title.trim(),
@@ -46,13 +50,19 @@ export function MarketplaceProvider({
         .map((paragraph) => paragraph.trim())
         .filter(Boolean),
       budgetMin: input.budget,
-      budgetMax: input.budget,
+      budgetMax: max,
+      budgetType: input.budgetType ?? "fixed",
+      duration: input.duration?.trim() || null,
       location: input.location,
       skills: input.skills,
       postedAt: Date.now(),
       postedLabel: "Just now",
       client: "Posted in this browser",
       postedLocally: true,
+      proposalCount: 0,
+      clientVerified: false,
+      clientMemberSince: new Date().toISOString(),
+      clientOpenJobs: 1,
     };
     setPosted((current) => [job, ...current]);
     return job;

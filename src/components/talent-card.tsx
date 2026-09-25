@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import type { Freelancer } from "@/lib/data";
 import { formatHourly } from "@/lib/format";
+import { StarRow } from "@/components/review-form";
 
 export function TalentCard({ person }: { person: Freelancer }) {
   return (
@@ -30,6 +31,15 @@ export function TalentCard({ person }: { person: Freelancer }) {
             <MapPin className="size-3.5" aria-hidden="true" />
             {person.city}, {person.province}
           </p>
+          {person.reviewCount ? (
+            <p className="flex flex-wrap items-center gap-2 text-sm">
+              <StarRow rating={person.rating ?? 0} />
+              <span className="text-muted-foreground">
+                {(person.rating ?? 0).toFixed(1)} · {person.reviewCount} review
+                {person.reviewCount === 1 ? "" : "s"}
+              </span>
+            </p>
+          ) : null}
           <ul className="flex flex-wrap gap-1.5">
             {person.skills.map((skill) => (
               <li key={skill}>
@@ -38,10 +48,13 @@ export function TalentCard({ person }: { person: Freelancer }) {
             ))}
           </ul>
           <div className="mt-auto flex items-end justify-between gap-3 pt-2">
-            <p className="font-heading text-lg">{formatHourly(person.hourlyRate)}</p>
-            <p className="text-right text-xs text-muted-foreground">
-              {person.availability}
-            </p>
+            <div>
+              <p className="font-heading text-lg">{formatHourly(person.hourlyRate)}</p>
+              {person.verified ? (
+                <p className="text-xs text-muted-foreground">Verified in Canada</p>
+              ) : null}
+            </div>
+            <Badge variant="outline">{person.availability}</Badge>
           </div>
         </CardContent>
       </Card>

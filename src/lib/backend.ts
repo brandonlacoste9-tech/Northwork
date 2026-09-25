@@ -53,7 +53,9 @@ export type JobRow = {
   title: string;
   description: string;
   budget_cad: number | string | null;
+  budget_max_cad?: number | string | null;
   budget_type: string | null;
+  duration?: string | null;
   skills: string[] | null;
   location: string | null;
   status: string | null;
@@ -126,19 +128,50 @@ export function mapProfileToFreelancer(row: ProfileRow): Freelancer {
   };
 }
 
+/** A published Canadian profile: name, city, and province. */
+export function profileIsPublished(row: {
+  display_name: string | null;
+  city: string | null;
+  province: string | null;
+}) {
+  return Boolean(row.display_name?.trim() && row.city?.trim() && row.province?.trim());
+}
+
 /** Map a Supabase jobs row to the job-board Job shape. */
-export function mapJobRowToJob(row: JobRow): Job {
+export function mapJobRowToJob(
+  row: JobRow,
+  extra?: Partial<
+    Pick<
+      Job,
+      | "client"
+      | "clientVerified"
+      | "clientMemberSince"
+      | "clientOpenJobs"
+      | "proposalCount"
+    >
+  >,
+): Job {
   const budget = toNumber(row.budget_cad);
+  const maxRaw =
+    row.budget_max_cad == null || row.budget_max_cad === ""
+      ? budget
+      : toNumber(row.budget_max_cad);
   return {
     id: row.id,
     title: row.title,
     description: paragraphs(row.description),
     budgetMin: budget,
-    budgetMax: budget,
+    budgetMax: Math.max(budget, maxRaw),
+    budgetType: row.budget_type === "hourly" ? "hourly" : "fixed",
+    duration: row.duration?.trim() || null,
     location: (row.location as WorkLocation) || REMOTE_IN_CANADA,
     skills: row.skills ?? [],
     postedAt: Date.parse(row.created_at) || Date.now(),
     postedLabel: timeAgo(row.created_at),
-    client: "A Northernwork client",
+    client: extra?.client?.trim() || "A Northernwork client",
+    clientVerified: extra?.clientVerified ?? false,
+    clientMemberSince: extra?.clientMemberSince ?? null,
+    clientOpenJobs: extra?.clientOpenJobs ?? 0,
+    proposalCount: extra?.proposalCount ?? 0,
   };
 }

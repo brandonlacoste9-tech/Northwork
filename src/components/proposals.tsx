@@ -27,13 +27,21 @@ function bidLabel(bid: ProposalRow["bid_cad"]) {
 }
 
 /** Cover-letter + bid form shown to signed-in freelancers on a job. */
-export function ProposalForm({ jobId }: { jobId: string }) {
+export function ProposalForm({
+  jobId,
+  proposalCount = 0,
+}: {
+  jobId: string;
+  proposalCount?: number;
+}) {
   const action = createProposal.bind(null, jobId);
   return (
-    <section className="mt-10 border-t pt-8">
-      <h2 className="font-heading text-2xl">Pitch for this project</h2>
+    <section id="pitch" className="mt-10 border-t pt-8">
+      <h2 className="font-heading text-2xl">Send a pitch</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        Your pitch goes straight to the client. One pitch per project.
+        {proposalCount === 0
+          ? "No pitches yet — be the first to pitch this project."
+          : "Your pitch goes straight to the client. One pitch per project."}
       </p>
       <form action={action} className="mt-4 grid gap-4">
         <div className="grid gap-2">
@@ -98,7 +106,7 @@ export function ProposalList({
         <div className="mt-4">
           <DirectoryEmpty
             title="No pitches yet"
-            body="Freelancers on Northernwork pitch in CAD. Invite someone from the talent directory."
+            body="No pitches yet — be the first to pitch this project. Invite someone from the talent directory."
             action={{ href: "/talent", label: "Browse talent" }}
           />
         </div>
@@ -179,12 +187,14 @@ export function ProposalList({
 }
 
 /** Sign-in nudge shown to visitors who are not logged in. */
-export function ProposalSignIn() {
+export function ProposalSignIn({ proposalCount = 0 }: { proposalCount?: number }) {
   return (
-    <section className="mt-10 border-t pt-8">
-      <h2 className="font-heading text-2xl">Pitch for this project</h2>
+    <section id="pitch" className="mt-10 border-t pt-8">
+      <h2 className="font-heading text-2xl">Send a pitch</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        You need an account to pitch on projects.
+        {proposalCount === 0
+          ? "No pitches yet — be the first to pitch this project. You need an account to send one."
+          : "You need an account to pitch on this project."}
       </p>
       <div className="mt-4 flex gap-2">
         <Button asChild className="h-10">
@@ -192,6 +202,26 @@ export function ProposalSignIn() {
         </Button>
         <Button asChild variant="outline" className="h-10">
           <Link href="/signup">Create account</Link>
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+/** Sample preview cannot store a pitch. */
+export function ProposalPreview() {
+  return (
+    <section id="pitch" className="mt-10 border-t pt-8">
+      <h2 className="font-heading text-2xl">Send a pitch</h2>
+      <p className="mt-2 text-sm text-muted-foreground">
+        No pitches yet — be the first to pitch this project. This sample preview does not save pitches.
+      </p>
+      <div className="mt-4 flex gap-2">
+        <Button asChild className="h-10">
+          <Link href="/signup">Create account</Link>
+        </Button>
+        <Button asChild variant="outline" className="h-10">
+          <Link href="/login">Log in</Link>
         </Button>
       </div>
     </section>

@@ -8,16 +8,12 @@ import { ReviewForm } from "@/components/review-form";
 import {
   ProposalForm,
   ProposalList,
+  ProposalPreview,
   ProposalSignIn,
 } from "@/components/proposals";
-import {
-  isSupabaseConfigured,
-  mapJobRowToJob,
-  type JobRow,
-  type ProfileRow,
-  type ProposalRow,
-} from "@/lib/backend";
+import { isSupabaseConfigured, type ProfileRow, type ProposalRow } from "@/lib/backend";
 import { getSeedJob } from "@/lib/data";
+import { loadJob } from "@/lib/listings";
 import { isStripeConfigured, stripePublishableKey } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
 
@@ -57,24 +53,23 @@ export default async function JobPage({ params }: PageProps) {
   if (!isSupabaseConfigured()) {
     return (
       <main>
-        <JobDetail id={id} />
+        <JobDetail id={id} showPitchLink>
+          <ProposalPreview />
+        </JobDetail>
       </main>
     );
   }
 
+  const loaded = await loadJob(id);
+  if (!loaded) notFound();
+  const { row: jobRow, job } = loaded;
   const supabase = await createClient();
-  const { data: row } = await supabase
-    .from("jobs")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  if (!row) notFound();
-  const jobRow = row as JobRow;
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
   const isOwner = Boolean(user && user.id === jobRow.client_id);
+  let hired = false;
 
   let proposalSlot: ReactNode = null;
   if (isOwner) {
@@ -131,6 +126,7 @@ export default async function JobPage({ params }: PageProps) {
       </p>
     ) : null;
     if ((mine as { status: string } | null)?.status === "accepted") {
+      hired = true;
       proposalSlot = (
         <section className="mt-10 border-t pt-8">
           <h2 className="font-heading text-2xl">You&apos;re hired</h2>
@@ -144,12 +140,12 @@ export default async function JobPage({ params }: PageProps) {
       proposalSlot = (
         <>
           {threadLink}
-          <ProposalForm jobId={id} />
+          <ProposalForm jobId={id} proposalCount={job.proposalCount ?? 0} />
         </>
       );
     }
   } else {
-    proposalSlot = <ProposalSignIn />;
+    proposalSlot = <ProposalSignIn proposalCount={job.proposalCount ?? 0} />;
   }
 
   let reviewSlot: ReactNode = null;
@@ -221,7 +217,11 @@ export default async function JobPage({ params }: PageProps) {
 
   return (
     <main>
-      <JobDetail id={id} job={mapJobRowToJob(jobRow)}>
+      <JobDetail
+        id={id}
+        job={job}
+        showPitchLink={!isOwner && !hired}
+      >
         {proposalSlot}
         {escrowSlot}
         {reviewSlot}

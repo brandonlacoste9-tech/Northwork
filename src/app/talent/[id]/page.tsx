@@ -6,10 +6,10 @@ import {
 } from "@/components/freelancer-profile";
 import {
   isSupabaseConfigured,
-  mapProfileToFreelancer,
   type ProfileRow,
 } from "@/lib/backend";
 import { getFreelancer } from "@/lib/data";
+import { loadTalent } from "@/lib/listings";
 import { createClient } from "@/lib/supabase/server";
 
 type PageProps = {
@@ -50,13 +50,8 @@ export default async function FreelancerPage({ params }: PageProps) {
 
   if (isSupabaseConfigured()) {
     const supabase = await createClient();
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-    if (!data) notFound();
-    const person = mapProfileToFreelancer(data as ProfileRow);
+    const person = await loadTalent(id);
+    if (!person) notFound();
     const { data: reviewRows } = await supabase
       .from("reviews")
       .select("id, rating, comment, created_at, reviewer_id")

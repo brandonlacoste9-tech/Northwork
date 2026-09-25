@@ -20,9 +20,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { AvatarUploader } from "@/components/avatar-uploader";
+import { PortfolioManager } from "@/components/portfolio-manager";
 import { upsertProfile } from "@/lib/actions";
 import { isSupabaseConfigured, type ProfileRow } from "@/lib/backend";
-import { PROVINCES } from "@/lib/data";
+import { PROVINCES, type PortfolioItem } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -53,6 +54,22 @@ export default async function ProfilePage() {
     .eq("id", user.id)
     .maybeSingle();
   const profile = data as ProfileRow | null;
+  const { data: workRows } = await supabase
+    .from("portfolio_items")
+    .select("id, title, image_url, url")
+    .eq("freelancer_id", user.id)
+    .order("created_at", { ascending: false });
+  const work: PortfolioItem[] = ((workRows ?? []) as {
+    id: string;
+    title: string;
+    image_url: string | null;
+    url: string | null;
+  }[]).map((item) => ({
+    id: item.id,
+    title: item.title,
+    imageUrl: item.image_url,
+    url: item.url,
+  }));
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -217,6 +234,7 @@ export default async function ProfilePage() {
           </form>
         </CardContent>
       </Card>
+      <PortfolioManager items={work} />
     </main>
   );
 }

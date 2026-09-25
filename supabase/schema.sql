@@ -496,3 +496,146 @@ create index if not exists payments_client_idx on public.payments (client_id);
 create index if not exists payments_freelancer_idx on public.payments (freelancer_id);
 
 grant select, insert, update on table public.payments to authenticated;
+
+-- ---------------------------------------------------- board + portfolio
+-- Extra job facts for the board. Safe to re-run.
+alter table public.jobs add column if not exists budget_max_cad numeric(10, 2);
+alter table public.jobs add column if not exists duration text;
+
+-- Pitch counts for the public board. Cover letters stay behind proposals RLS.
+create or replace function public.proposal_counts(job_ids uuid[])
+returns table (job_id uuid, proposal_count bigint)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select p.job_id, count(*)::bigint
+  from public.proposals p
+  where p.job_id = any (job_ids)
+  group by p.job_id;
+$$;
+
+revoke all on function public.proposal_counts(uuid[]) from public;
+grant execute on function public.proposal_counts(uuid[]) to anon, authenticated;
+
+-- Closed projects are not public, so completed counts go through this function.
+create or replace function public.completed_project_counts(profile_ids uuid[])
+returns table (profile_id uuid, completed_count bigint)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select x.profile_id, count(distinct x.job_id)::bigint
+  from (
+    select j.client_id as profile_id, j.id as job_id
+    from public.jobs j
+    where j.status = 'closed'
+      and j.client_id = any (profile_ids)
+    union
+    select p.freelancer_id, p.job_id
+    from public.proposals p
+    join public.jobs j on j.id = p.job_id
+    where j.status = 'closed'
+      and p.status = 'accepted'
+      and p.freelancer_id = any (profile_ids)
+  ) x
+  group by x.profile_id;
+$$;
+
+revoke all on function public.completed_project_counts(uuid[]) from public;
+grant execute on function public.completed_project_counts(uuid[]) to anon, authenticated;
+
+create table if not exists public.portfolio_items (
+  id uuid primary key default gen_random_uuid(),
+  freelancer_id uuid not null references public.profiles (id) on delete cascade,
+  title text not null,
+  image_url text,
+  url text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.portfolio_items enable row level security;
+
+drop policy if exists "portfolio: public read" on public.portfolio_items;
+create policy "portfolio: public read"
+  on public.portfolio_items for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "portfolio: insert own" on public.portfolio_items;
+create policy "portfolio: insert own"
+  on public.portfolio_items for insert
+  to authenticated
+  with check (freelancer_id = (select auth.uid()));
+
+drop policy if exists "portfolio: update own" on public.portfolio_items;
+create policy "portfolio: update own"
+  on public.portfolio_items for update
+  to authenticated
+  using (freelancer_id = (select auth.uid()))
+  with check (freelancer_id = (select auth.uid()));
+
+drop policy if exists "portfolio: delete own" on public.portfolio_items;
+create policy "portfolio: delete own"
+  on public.portfolio_items for delete
+  to authenticated
+  using (freelancer_id = (select auth.uid()));
+
+create index if not exists portfolio_freelancer_idx
+  on public.portfolio_items (freelancer_id, created_at desc);
+
+grant select on table public.portfolio_items to anon, authenticated;
+grant insert, update, delete on table public.portfolio_items to authenticated;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'portfolio',
+  'portfolio',
+  true,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do update
+  set public = excluded.public,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "portfolio: public read" on storage.objects;
+create policy "portfolio: public read"
+  on storage.objects for select
+  to anon, authenticated
+  using (bucket_id = 'portfolio');
+
+drop policy if exists "portfolio: insert own folder" on storage.objects;
+create policy "portfolio: insert own folder"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'portfolio'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists "portfolio: update own folder" on storage.objects;
+create policy "portfolio: update own folder"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'portfolio'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  )
+  with check (
+    bucket_id = 'portfolio'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists "portfolio: delete own folder" on storage.objects;
+create policy "portfolio: delete own folder"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'portfolio'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+

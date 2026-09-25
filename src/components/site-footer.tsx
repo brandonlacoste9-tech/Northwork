@@ -8,7 +8,7 @@ export function SiteFooter() {
           <Link href="/" className="font-medium text-foreground">
             Northernwork
           </Link>{" "}
-          · northernwork.com
+          · northernwork.ca
         </p>
         <p>A freelance marketplace for clients and freelancers in Canada.</p>
       </div>

@@ -30,7 +30,7 @@ export default async function TalentPage() {
     <main>
       <div className="border-b">
         <div className="mx-auto max-w-6xl px-4 py-10">
-          <p className="text-sm font-medium text-primary">northernwork.com</p>
+          <p className="text-sm font-medium text-primary">northernwork.ca</p>
           <h1 className="mt-2 font-heading text-4xl tracking-tight">
             Canadian freelancers
           </h1>

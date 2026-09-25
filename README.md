@@ -1,6 +1,6 @@
 # Northernwork
 
-Northernwork is a freelance marketplace for clients and freelancers in Canada. The public site is [northernwork.com](https://northernwork.com).
+Northernwork is a freelance marketplace for clients and freelancers in Canada. The public site is [northernwork.ca](https://northernwork.ca).
 
 Rates are in CAD. Profiles name a Canadian city and province. Remote work means remote inside Canada.
 

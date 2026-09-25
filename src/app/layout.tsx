@@ -17,7 +17,7 @@ const heading = Fraunces({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://northernwork.com"),
+  metadataBase: new URL("https://northernwork.ca"),
   title: {
     default: "Northernwork",
     template: "%s · Northernwork",
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     title: "Northernwork",
     description:
       "A freelance marketplace for clients and freelancers in Canada.",
-    url: "https://northernwork.com",
+    url: "https://northernwork.ca",
     siteName: "Northernwork",
     locale: "en_CA",
     type: "website",

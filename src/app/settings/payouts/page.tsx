@@ -64,7 +64,7 @@ export default async function PayoutsPage() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
-      <p className="text-sm font-medium text-primary">northernwork.com</p>
+      <p className="text-sm font-medium text-primary">northernwork.ca</p>
       <h1 className="mt-2 font-heading text-4xl tracking-tight">Payouts</h1>
       <p className="mt-3 text-muted-foreground">
         Freelancers receive CAD through Stripe Connect. Northernwork keeps 5% when a client releases escrow.

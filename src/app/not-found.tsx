@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 export default function NotFound() {
   return (
     <main className="mx-auto max-w-xl px-4 py-20">
-      <p className="text-sm font-medium text-primary">northernwork.com</p>
+      <p className="text-sm font-medium text-primary">northernwork.ca</p>
       <h1 className="mt-2 font-heading text-4xl tracking-tight">
         That page is not listed
       </h1>

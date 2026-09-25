@@ -39,7 +39,7 @@ const freelancerSteps = [
   },
   {
     title: "Stay inside the country",
-    body: "If the client or the freelancer is outside Canada, the work does not belong on northernwork.com.",
+    body: "If the client or the freelancer is outside Canada, the work does not belong on northernwork.ca.",
   },
 ];
 
@@ -53,7 +53,7 @@ export default function HomePage() {
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-14 md:grid-cols-[1.35fr_0.8fr] md:py-20">
           <div>
             <p className="text-sm font-medium tracking-wide text-primary">
-              Canada only · northernwork.com
+              Canada only · northernwork.ca
             </p>
             <h1 className="mt-3 max-w-xl font-heading text-4xl tracking-tight text-balance sm:text-5xl md:text-6xl">
               Hire independents who work in Canada.

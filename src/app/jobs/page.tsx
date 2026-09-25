@@ -31,7 +31,7 @@ export default async function JobsPage() {
     <main>
       <div className="border-b">
         <div className="mx-auto max-w-3xl px-4 py-10">
-          <p className="text-sm font-medium text-primary">northernwork.com</p>
+          <p className="text-sm font-medium text-primary">northernwork.ca</p>
           <h1 className="mt-2 font-heading text-4xl tracking-tight">
             Open projects
           </h1>

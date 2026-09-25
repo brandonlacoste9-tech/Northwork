@@ -79,8 +79,8 @@ async function enrichJobs(
       proposalCount: pitches.get(row.id) ?? 0,
     });
   });
-  const real = jobs.filter((job) => !job.clientSample);
-  return real.length > 0 ? real : jobs;
+  // Example listings stay visible alongside real ones; the UI badges them as examples.
+  return jobs;
 }
 
 export async function loadOpenJobs(): Promise<Job[] | undefined> {
@@ -176,8 +176,8 @@ export async function loadTalentDirectory(): Promise<Freelancer[] | undefined> {
     .select("*")
     .order("created_at", { ascending: false });
   const people = await annotateTalent(supabase, (data ?? []) as ProfileRow[], false);
-  const real = people.filter((person) => !person.sample);
-  return real.length > 0 ? real : people;
+  // Example profiles stay visible alongside real ones; the UI badges them as examples.
+  return people;
 }
 
 export async function loadTalent(id: string): Promise<Freelancer | null> {

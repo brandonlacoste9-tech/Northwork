@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/card";
 import { listConversations } from "@/lib/actions";
 import { isSupabaseConfigured } from "@/lib/backend";
+import { translate } from "@/lib/i18n";
+import { getLocale } from "@/lib/locale";
 
 export const metadata: Metadata = {
   title: "Messages",
@@ -36,20 +38,21 @@ export default async function MessagesPage() {
   }
 
   const conversations = await listConversations();
+  const locale = await getLocale();
+  const directLabel = translate(locale, "profile.contactThread");
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <p className="text-sm font-medium text-primary">northernwork.ca</p>
       <h1 className="mt-2 font-heading text-4xl tracking-tight">Messages</h1>
       <p className="mt-3 text-muted-foreground">
-        Threads open when a client and a freelancer are on the same pitch.
-        One thread per project.
+        Threads open from a profile, or when a client and a freelancer are on the same project.
       </p>
       {conversations.length === 0 ? (
         <div className="mt-8">
           <DirectoryEmpty
             title="No conversations yet"
-            body="A thread opens when a client accepts a pitch. Until then, the inbox stays empty."
+            body="A thread opens from a profile, or when a client accepts a pitch."
             action={{ href: "/jobs", label: "Browse open projects" }}
           />
         </div>
@@ -64,7 +67,7 @@ export default async function MessagesPage() {
                 <span>
                   <span className="block font-medium">{conversation.otherName}</span>
                   <span className="mt-1 block text-sm text-muted-foreground">
-                    {conversation.jobTitle}
+                    {conversation.direct ? directLabel : conversation.jobTitle}
                   </span>
                   <span className="mt-1 block text-sm text-foreground/80">
                     {conversation.preview}

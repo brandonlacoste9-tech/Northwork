@@ -15,8 +15,11 @@ type PortfolioRow = {
   id: string;
   freelancer_id: string;
   title: string;
+  description: string | null;
   image_url: string | null;
+  image_urls: string[] | null;
   url: string | null;
+  position: number | null;
 };
 
 function asCount(value: number | string | null | undefined) {
@@ -119,9 +122,10 @@ async function annotateTalent(
     withPortfolio
       ? supabase
           .from("portfolio_items")
-          .select("id, freelancer_id, title, image_url, url")
+          .select("id, freelancer_id, title, description, image_url, image_urls, url, position")
           .in("freelancer_id", ids)
-          .order("created_at", { ascending: false })
+          .order("position", { ascending: true })
+          .order("created_at", { ascending: true })
       : Promise.resolve({ data: [] as PortfolioRow[] }),
   ]);
   const ratings = new Map<string, number[]>();
@@ -145,10 +149,14 @@ async function annotateTalent(
   const portfolioById = new Map<string, PortfolioItem[]>();
   for (const item of (portfolioResult.data ?? []) as PortfolioRow[]) {
     const list = portfolioById.get(item.freelancer_id) ?? [];
+    const images = (item.image_urls ?? []).filter(Boolean);
+    const cover = images[0] ?? item.image_url;
     list.push({
       id: item.id,
       title: item.title,
-      imageUrl: item.image_url,
+      summary: item.description,
+      imageUrl: cover,
+      images: images.length > 0 ? images : cover ? [cover] : [],
       url: item.url,
     });
     portfolioById.set(item.freelancer_id, list);

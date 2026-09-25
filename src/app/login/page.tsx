@@ -130,7 +130,10 @@ function LoginForm() {
           </form>
           <p className="mt-4 text-sm text-muted-foreground">
             {t("login.switch")}{" "}
-            <Link href="/signup" className="font-medium text-primary hover:underline">
+            <Link
+              href={next === "/" ? "/signup" : `/signup?next=${encodeURIComponent(next)}`}
+              className="font-medium text-primary hover:underline"
+            >
               Create an account
             </Link>
           </p>

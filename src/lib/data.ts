@@ -49,8 +49,17 @@ export type PortfolioItem = {
   id: string;
   title: string;
   imageUrl?: string | null;
+  images?: string[];
   url?: string | null;
   summary?: string | null;
+};
+
+export type ProfileLinks = {
+  website?: string | null;
+  behance?: string | null;
+  github?: string | null;
+  linkedin?: string | null;
+  instagram?: string | null;
 };
 
 export type Freelancer = {
@@ -73,6 +82,7 @@ export type Freelancer = {
   sample?: boolean;
   pro?: boolean;
   portfolio?: PortfolioItem[];
+  links?: ProfileLinks;
 };
 
 export type BudgetType = "fixed" | "hourly";

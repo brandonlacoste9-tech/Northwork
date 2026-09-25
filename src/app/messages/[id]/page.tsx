@@ -7,6 +7,8 @@ import {
   type ThreadMessage,
 } from "@/lib/actions";
 import { isSupabaseConfigured } from "@/lib/backend";
+import { translate } from "@/lib/i18n";
+import { getLocale } from "@/lib/locale";
 import { createClient } from "@/lib/supabase/server";
 
 type PageProps = {
@@ -39,8 +41,11 @@ export default async function ConversationPage({ params }: PageProps) {
       ? conversation.freelancer_id
       : conversation.client_id;
 
+  const locale = await getLocale();
   const [{ data: job }, { data: other }, { data: messages }] = await Promise.all([
-    supabase.from("jobs").select("title").eq("id", conversation.job_id).maybeSingle(),
+    conversation.job_id
+      ? supabase.from("jobs").select("title").eq("id", conversation.job_id).maybeSingle()
+      : Promise.resolve({ data: null }),
     supabase.from("profiles").select("display_name").eq("id", otherId).maybeSingle(),
     supabase
       .from("messages")
@@ -63,7 +68,8 @@ export default async function ConversationPage({ params }: PageProps) {
         {(other?.display_name as string | null) || "Northernwork member"}
       </h1>
       <p className="mt-2 text-muted-foreground">
-        {(job?.title as string | null) || "Project"}
+        {(job?.title as string | null) ||
+          (conversation.job_id ? "Project" : translate(locale, "profile.contactThread"))}
       </p>
       <div className="mt-8">
         <MessageThread

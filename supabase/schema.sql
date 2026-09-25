@@ -224,11 +224,11 @@ create policy "conversations: participants insert"
   on public.conversations for insert
   to authenticated
   with check (
-    (select auth.uid()) in (client_id, freelancer_id)
+    (select auth.uid()) in (conversations.client_id, conversations.freelancer_id)
     and exists (
       select 1 from public.jobs j
-      where j.id = job_id
-        and j.client_id = client_id
+      where j.id = conversations.job_id
+        and j.client_id = conversations.client_id
     )
     and exists (
       select 1 from public.proposals p
@@ -653,14 +653,14 @@ create policy "conversations: participants insert"
   on public.conversations for insert
   to authenticated
   with check (
-    (select auth.uid()) in (client_id, freelancer_id)
+    (select auth.uid()) in (conversations.client_id, conversations.freelancer_id)
     and exists (
       select 1 from public.jobs j
-      where j.id = job_id
-        and j.client_id = client_id
+      where j.id = conversations.job_id
+        and j.client_id = conversations.client_id
     )
     and (
-      (select auth.uid()) = client_id
+      (select auth.uid()) = conversations.client_id
       or exists (
         select 1 from public.proposals p
         where p.job_id = conversations.job_id
@@ -1773,6 +1773,71 @@ grant execute on function public.dispatch_daily_job_alerts() to service_role;
 
 revoke all on function public.unsubscribe_job_alert(uuid) from public;
 grant execute on function public.unsubscribe_job_alert(uuid) to anon, authenticated, service_role;
+
+-- -------------------------------- portfolio, profile links, intro messages
+-- Safe to re-run. Sample profiles are not messageable.
+
+alter table public.portfolio_items add column if not exists description text;
+alter table public.portfolio_items add column if not exists position integer not null default 0;
+alter table public.portfolio_items add column if not exists image_urls text[] not null default '{}';
+
+update public.portfolio_items
+set image_urls = array[image_url]
+where image_url is not null
+  and coalesce(cardinality(image_urls), 0) = 0;
+
+create index if not exists portfolio_order_idx
+  on public.portfolio_items (freelancer_id, position, created_at);
+
+alter table public.profiles add column if not exists website text;
+alter table public.profiles add column if not exists behance text;
+alter table public.profiles add column if not exists github text;
+alter table public.profiles add column if not exists linkedin text;
+alter table public.profiles add column if not exists instagram text;
+
+alter table public.conversations alter column job_id drop not null;
+
+create unique index if not exists conversations_intro_idx
+  on public.conversations (client_id, freelancer_id)
+  where job_id is null;
+
+drop policy if exists "conversations: participants insert" on public.conversations;
+create policy "conversations: participants insert"
+  on public.conversations for insert
+  to authenticated
+  with check (
+    (select auth.uid()) in (conversations.client_id, conversations.freelancer_id)
+    and (
+      (
+        conversations.job_id is not null
+        and exists (
+          select 1 from public.jobs j
+          where j.id = conversations.job_id
+            and j.client_id = conversations.client_id
+        )
+        and (
+          (select auth.uid()) = conversations.client_id
+          or exists (
+            select 1 from public.proposals p
+            where p.job_id = conversations.job_id
+              and p.freelancer_id = conversations.freelancer_id
+              and p.status in ('pending', 'accepted')
+          )
+        )
+      )
+      or (
+        conversations.job_id is null
+        and (select auth.uid()) = conversations.client_id
+        and conversations.client_id <> conversations.freelancer_id
+        and exists (
+          select 1 from public.profiles p
+          where p.id = conversations.freelancer_id
+            and coalesce(p.is_sample, false) = false
+        )
+      )
+    )
+  );
+
 
 
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,9 +18,16 @@ import { useT } from "@/components/locale-provider";
 import { isSupabaseConfigured } from "@/lib/backend";
 import { createClient } from "@/lib/supabase/client";
 
-export default function SignupPage() {
+function safeNext(raw: string | null) {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return "/";
+  return raw;
+}
+
+function SignupForm() {
   const t = useT();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNext(searchParams.get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -48,9 +55,9 @@ export default function SignupPage() {
     setLoading(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
-      router.push("/");
+      router.push(data.session ? next : "/");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign up failed.");
@@ -58,6 +65,8 @@ export default function SignupPage() {
       setLoading(false);
     }
   }
+
+  const loginHref = next === "/" ? "/login" : `/login?next=${encodeURIComponent(next)}`;
 
   return (
     <main className="mx-auto max-w-md px-4 py-16">
@@ -114,12 +123,28 @@ export default function SignupPage() {
           <p className="text-sm text-muted-foreground">{t("signup.confirm")}</p>
           <p className="mt-4 text-sm text-muted-foreground">
             {t("signup.switch")}{" "}
-            <Link href="/login" className="font-medium text-primary hover:underline">
+            <Link href={loginHref} className="font-medium text-primary hover:underline">
               Sign in
             </Link>
           </p>
         </CardContent>
       </Card>
     </main>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="mx-auto max-w-md px-4 py-16">
+          <Card>
+            <CardContent className="p-8 text-sm text-muted-foreground">Loading…</CardContent>
+          </Card>
+        </main>
+      }
+    >
+      <SignupForm />
+    </Suspense>
   );
 }

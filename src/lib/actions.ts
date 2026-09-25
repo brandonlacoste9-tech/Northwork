@@ -7,6 +7,8 @@ import { dispatchInstantAlerts } from "@/lib/job-alerts";
 import { featureJob } from "@/lib/pitches";
 import { createClient } from "@/lib/supabase/server";
 import { notifyUser } from "@/lib/notify";
+import { getLocale } from "@/lib/locale";
+import { translate, type MessageKey } from "@/lib/i18n";
 
 function parseSkills(raw: FormDataEntryValue | null): string[] {
   return String(raw ?? "")
@@ -106,6 +108,7 @@ async function openConversation(jobId: string, freelancerId: string) {
 export type InboxConversation = {
   id: string;
   jobTitle: string;
+  direct: boolean;
   otherName: string;
   preview: string;
   unread: number;
@@ -140,12 +143,20 @@ export async function listConversations(): Promise<InboxConversation[]> {
   const profileIds = [
     ...new Set(conversations.flatMap((row) => [row.client_id, row.freelancer_id])),
   ];
-  const jobIds = [...new Set(conversations.map((row) => row.job_id))];
+  const jobIds = [
+    ...new Set(
+      conversations
+        .map((row) => row.job_id as string | null)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
 
-  const [{ data: profiles }, { data: jobs }, { data: messages }, { data: reads }] =
+  const [{ data: profiles }, jobsResult, { data: messages }, { data: reads }] =
     await Promise.all([
       supabase.from("profiles").select("id, display_name").in("id", profileIds),
-      supabase.from("jobs").select("id, title").in("id", jobIds),
+      jobIds.length > 0
+        ? supabase.from("jobs").select("id, title").in("id", jobIds)
+        : Promise.resolve({ data: [] as { id: string; title: string | null }[] }),
       supabase
         .from("messages")
         .select("id, conversation_id, sender_id, body, created_at")
@@ -162,7 +173,7 @@ export async function listConversations(): Promise<InboxConversation[]> {
     (profiles ?? []).map((profile) => [profile.id as string, (profile.display_name as string | null) || "Northernwork member"])
   );
   const titleById = new Map(
-    (jobs ?? []).map((job) => [job.id as string, (job.title as string) || "Project"])
+    (jobsResult.data ?? []).map((job) => [job.id as string, (job.title as string) || "Project"])
   );
   const readAt = new Map(
     (reads ?? []).map((read) => [read.conversation_id as string, Date.parse(read.last_read_at as string)])
@@ -188,9 +199,11 @@ export async function listConversations(): Promise<InboxConversation[]> {
     .map((row) => {
       const otherId = row.client_id === user.id ? row.freelancer_id : row.client_id;
       const last = latest.get(row.id);
+      const jobId = row.job_id as string | null;
       return {
         id: row.id as string,
-        jobTitle: titleById.get(row.job_id) ?? "Project",
+        jobTitle: jobId ? (titleById.get(jobId) ?? "Project") : "",
+        direct: !jobId,
         otherName: nameById.get(otherId) ?? "Northernwork member",
         preview: last?.body ?? "No messages yet",
         unread: unread.get(row.id) ?? 0,
@@ -342,6 +355,22 @@ export async function inviteFreelancer(freelancerId: string, jobId: string, note
 export async function upsertProfile(formData: FormData) {
   const { supabase, user } = await requireUser();
 
+  const website = optionalLink(formData.get("website"));
+  const behance = optionalLink(formData.get("behance"), ["behance.net"]);
+  const github = optionalLink(formData.get("github"), ["github.com"]);
+  const linkedin = optionalLink(formData.get("linkedin"), ["linkedin.com"]);
+  const instagram = optionalLink(formData.get("instagram"), ["instagram.com"]);
+  const badLink = [website, behance, github, linkedin, instagram].find(
+    (item) => "error" in item && item.error,
+  );
+  if (badLink && "error" in badLink) {
+    const site =
+      "host" in badLink && typeof badLink.host === "string"
+        ? `&site=${encodeURIComponent(badLink.host)}`
+        : "";
+    redirect(`/profile?error=${badLink.error}${site}`);
+  }
+
   const { error } = await supabase.from("profiles").upsert(
     {
       id: user.id,
@@ -356,6 +385,11 @@ export async function upsertProfile(formData: FormData) {
       languages: parseSkills(formData.get("languages")).length
         ? parseSkills(formData.get("languages"))
         : ["English"],
+      website: website.url,
+      behance: behance.url,
+      github: github.url,
+      linkedin: linkedin.url,
+      instagram: instagram.url,
     },
     { onConflict: "id" }
   );
@@ -636,46 +670,118 @@ export async function uploadAvatar(formData: FormData) {
   return { url: avatarUrl };
 }
 
-/** Add one portfolio piece. Image is optional and stored under portfolio/{user-id}/. */
+function optionalLink(raw: FormDataEntryValue | null, hosts?: string[]) {
+  const value = String(raw ?? "").trim();
+  if (!value) return { url: null as string | null };
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return { url: null, error: "invalid" as const };
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    return { url: null, error: "invalid" as const };
+  }
+  if (hosts && !hosts.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`))) {
+    return { url: null, error: "host" as const, host: hosts[0] };
+  }
+  return { url: url.toString() };
+}
+
+async function said(key: MessageKey, vars?: Record<string, string | number>) {
+  return translate(await getLocale(), key, vars);
+}
+
+async function linkFailure(result: ReturnType<typeof optionalLink>) {
+  if (!("error" in result) || !result.error) return null;
+  if (result.error === "host") return said("profile.linkHost", { host: result.host ?? "" });
+  return said("profile.linkInvalid");
+}
+
+function portfolioImages(value: string[] | string | null | undefined, cover: string | null) {
+  const list = Array.isArray(value) ? value.filter(Boolean) : [];
+  if (list.length > 0) return list;
+  return cover ? [cover] : [];
+}
+
+async function storePortfolioFiles(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  files: File[],
+): Promise<
+  | { urls: string[] }
+  | { error: "profile.workImageSize" | "profile.workImageType" | "profile.workImageFail" }
+> {
+  const urls: string[] = [];
+  for (const file of files) {
+    if (file.size > 5 * 1024 * 1024) return { error: "profile.workImageSize" as const };
+    const ext = AVATAR_TYPES[file.type];
+    if (!ext) return { error: "profile.workImageType" as const };
+    const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from("portfolio")
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (uploadError) return { error: "profile.workImageFail" as const };
+    const { data } = supabase.storage.from("portfolio").getPublicUrl(path);
+    urls.push(data.publicUrl);
+  }
+  return { urls };
+}
+
+function portfolioPath(publicUrl: string, userId: string) {
+  const marker = `/portfolio/${userId}/`;
+  const index = publicUrl.indexOf(marker);
+  if (index < 0) return null;
+  return `${userId}/${publicUrl.slice(index + marker.length).split("?")[0]}`;
+}
+
+/** Add one portfolio piece. Images are optional and stored under portfolio/{user-id}/. */
 export async function addPortfolioItem(formData: FormData) {
   const { supabase, user } = await requireUser();
   await ensureOwnProfile(supabase, user.id);
 
   const title = String(formData.get("title") ?? "").trim();
-  if (!title) return { error: "Add a title." };
-  if (title.length > 120) return { error: "Keep the title under 120 characters." };
+  if (!title) return { error: await said("profile.workNeedTitle") };
+  if (title.length > 120) return { error: await said("profile.workTitleLong") };
+  const description = String(formData.get("description") ?? "").trim();
+  if (description.length > 800) return { error: await said("profile.workDescLong") };
 
-  const rawUrl = String(formData.get("url") ?? "").trim();
-  if (rawUrl && !/^https?:\/\//i.test(rawUrl)) {
-    return { error: "The link must start with http:// or https://." };
-  }
+  const link = optionalLink(formData.get("url"));
+  const linkError = await linkFailure(link);
+  if (linkError) return { error: linkError };
+  const rawUrl = link.url;
 
   const { count } = await supabase
     .from("portfolio_items")
     .select("id", { count: "exact", head: true })
     .eq("freelancer_id", user.id);
-  if ((count ?? 0) >= 12) return { error: "Twelve projects is the maximum." };
+  if ((count ?? 0) >= 12) return { error: await said("profile.workMax") };
 
-  let imageUrl: string | null = null;
-  const file = formData.get("image");
-  if (file instanceof File && file.size > 0) {
-    if (file.size > 5 * 1024 * 1024) return { error: "Images must be 5 MB or smaller." };
-    const ext = AVATAR_TYPES[file.type];
-    if (!ext) return { error: "Use a JPG, PNG, or WebP image." };
-    const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
-    const { error: uploadError } = await supabase.storage
-      .from("portfolio")
-      .upload(path, file, { contentType: file.type, upsert: false });
-    if (uploadError) return { error: uploadError.message };
-    const { data } = supabase.storage.from("portfolio").getPublicUrl(path);
-    imageUrl = data.publicUrl;
-  }
+  const files = formData
+    .getAll("images")
+    .filter((file): file is File => file instanceof File && file.size > 0)
+    .slice(0, 6);
+  const stored = await storePortfolioFiles(supabase, user.id, files);
+  if ("error" in stored) return { error: await said(stored.error) };
+  const images = stored.urls;
+
+  const { data: last } = await supabase
+    .from("portfolio_items")
+    .select("position")
+    .eq("freelancer_id", user.id)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const position = Number((last as { position?: number } | null)?.position ?? -1) + 1;
 
   const { error } = await supabase.from("portfolio_items").insert({
     freelancer_id: user.id,
     title,
-    image_url: imageUrl,
-    url: rawUrl || null,
+    description: description || null,
+    image_url: images[0] ?? null,
+    image_urls: images,
+    url: rawUrl,
+    position,
   });
   if (error) return { error: error.message };
 
@@ -684,14 +790,188 @@ export async function addPortfolioItem(formData: FormData) {
   return { ok: true };
 }
 
+export async function updatePortfolioItem(id: string, formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) return { error: await said("profile.workNeedTitle") };
+  if (title.length > 120) return { error: await said("profile.workTitleLong") };
+  const description = String(formData.get("description") ?? "").trim();
+  if (description.length > 800) return { error: await said("profile.workDescLong") };
+  const link = optionalLink(formData.get("url"));
+  const linkError = await linkFailure(link);
+  if (linkError) return { error: linkError };
+  const rawUrl = link.url;
+
+  const { data: row, error: readError } = await supabase
+    .from("portfolio_items")
+    .select("image_url, image_urls")
+    .eq("id", id)
+    .eq("freelancer_id", user.id)
+    .maybeSingle();
+  if (readError) return { error: readError.message };
+  if (!row) return { error: await said("profile.workMissing") };
+
+  const current = portfolioImages(
+    (row as { image_urls?: string[] | null }).image_urls,
+    (row as { image_url?: string | null }).image_url ?? null,
+  );
+  const dropped = new Set(formData.getAll("drop").map((value) => String(value)));
+  const kept = current.filter((url) => !dropped.has(url));
+  const files = formData
+    .getAll("images")
+    .filter((file): file is File => file instanceof File && file.size > 0);
+  if (kept.length + files.length > 6) return { error: await said("profile.workMaxImages") };
+  const stored = await storePortfolioFiles(supabase, user.id, files);
+  if ("error" in stored) return { error: await said(stored.error) };
+  const images = [...kept, ...stored.urls];
+  const removed = current.filter((url) => dropped.has(url));
+  const paths = removed
+    .map((url) => portfolioPath(url, user.id))
+    .filter((path): path is string => Boolean(path));
+  if (paths.length > 0) {
+    await supabase.storage.from("portfolio").remove(paths);
+  }
+
+  const { error } = await supabase
+    .from("portfolio_items")
+    .update({
+      title,
+      description: description || null,
+      url: rawUrl,
+      image_url: images[0] ?? null,
+      image_urls: images,
+    })
+    .eq("id", id)
+    .eq("freelancer_id", user.id);
+  if (error) return { error: error.message };
+  revalidatePath("/profile");
+  revalidatePath(`/talent/${user.id}`);
+  return { ok: true };
+}
+
+export async function movePortfolioItem(id: string, direction: "up" | "down") {
+  const { supabase, user } = await requireUser();
+  const { data, error } = await supabase
+    .from("portfolio_items")
+    .select("id, position, created_at")
+    .eq("freelancer_id", user.id)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as { id: string; position: number; created_at: string }[];
+  const index = rows.findIndex((row) => row.id === id);
+  const swapWith = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || swapWith < 0 || swapWith >= rows.length) return;
+  const ordered = rows.map((row, position) => ({ ...row, position }));
+  const current = ordered[index].position;
+  ordered[index].position = ordered[swapWith].position;
+  ordered[swapWith].position = current;
+  if (ordered[index].position === ordered[swapWith].position) {
+    ordered[index].position = swapWith;
+    ordered[swapWith].position = index;
+  }
+  for (const row of ordered) {
+    const { error: updateError } = await supabase
+      .from("portfolio_items")
+      .update({ position: row.position })
+      .eq("id", row.id)
+      .eq("freelancer_id", user.id);
+    if (updateError) throw new Error(updateError.message);
+  }
+  revalidatePath("/profile");
+  revalidatePath(`/talent/${user.id}`);
+}
+
 export async function deletePortfolioItem(id: string) {
   const { supabase, user } = await requireUser();
+  const { data: row } = await supabase
+    .from("portfolio_items")
+    .select("image_url, image_urls")
+    .eq("id", id)
+    .eq("freelancer_id", user.id)
+    .maybeSingle();
   const { error } = await supabase
     .from("portfolio_items")
     .delete()
     .eq("id", id)
     .eq("freelancer_id", user.id);
   if (error) throw new Error(error.message);
+  if (row) {
+    const images = portfolioImages(
+      (row as { image_urls?: string[] | null }).image_urls,
+      (row as { image_url?: string | null }).image_url ?? null,
+    );
+    const paths = images
+      .map((url) => portfolioPath(url, user.id))
+      .filter((path): path is string => Boolean(path));
+    if (paths.length > 0) await supabase.storage.from("portfolio").remove(paths);
+  }
   revalidatePath("/profile");
   revalidatePath(`/talent/${user.id}`);
+}
+
+/** Open a profile thread. Sample profiles are refused. */
+export async function startProfileConversation(
+  _prev: { error: string } | null,
+  formData: FormData,
+): Promise<{ error: string } | null> {
+  const { supabase, user } = await requireUser();
+  const freelancerId = String(formData.get("freelancer_id") ?? "");
+  const locale = await getLocale();
+  const t = (key: MessageKey) => translate(locale, key);
+  if (!freelancerId || freelancerId === user.id) return { error: t("profile.contactSelf") };
+
+  await ensureOwnProfile(supabase, user.id);
+  const { data: freelancer } = await supabase
+    .from("profiles")
+    .select("id, is_sample, display_name")
+    .eq("id", freelancerId)
+    .maybeSingle();
+  if (!freelancer || freelancer.is_sample) return { error: t("profile.contactSample") };
+
+  const { data: existing } = await supabase
+    .from("conversations")
+    .select("id")
+    .is("job_id", null)
+    .eq("client_id", user.id)
+    .eq("freelancer_id", freelancerId)
+    .maybeSingle();
+  if (existing?.id) redirect(`/messages/${existing.id}`);
+
+  const { data: created, error } = await supabase
+    .from("conversations")
+    .insert({
+      job_id: null,
+      client_id: user.id,
+      freelancer_id: freelancerId,
+    })
+    .select("id")
+    .single();
+  if (error || !created) {
+    if (error?.code === "23505") {
+      const { data: again } = await supabase
+        .from("conversations")
+        .select("id")
+        .is("job_id", null)
+        .eq("client_id", user.id)
+        .eq("freelancer_id", freelancerId)
+        .maybeSingle();
+      if (again?.id) redirect(`/messages/${again.id}`);
+    }
+    return { error: error?.message ?? t("profile.contactSample") };
+  }
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", user.id)
+    .maybeSingle();
+  await notifyUser(supabase, {
+    userId: freelancerId,
+    kind: "message",
+    body: (me as { display_name?: string | null } | null)?.display_name?.trim() || "New message",
+    href: `/messages/${created.id}`,
+  });
+  revalidatePath("/messages");
+  redirect(`/messages/${created.id}`);
 }

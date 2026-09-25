@@ -24,6 +24,8 @@ import { PortfolioManager } from "@/components/portfolio-manager";
 import { upsertProfile } from "@/lib/actions";
 import { isSupabaseConfigured, type ProfileRow } from "@/lib/backend";
 import { PROVINCES, type PortfolioItem } from "@/lib/data";
+import { translate, type MessageKey } from "@/lib/i18n";
+import { getLocale } from "@/lib/locale";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -37,7 +39,13 @@ const AVAILABILITY = [
   "Limited",
 ] as const;
 
-export default async function ProfilePage() {
+const LINK_HOSTS = new Set(["behance.net", "github.com", "linkedin.com", "instagram.com"]);
+
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; site?: string }>;
+}) {
   // Profiles only exist with the backend. In preview mode there is
   // nothing to edit, so send people back to the talent directory.
   if (!isSupabaseConfigured()) redirect("/talent");
@@ -54,22 +62,41 @@ export default async function ProfilePage() {
     .eq("id", user.id)
     .maybeSingle();
   const profile = data as ProfileRow | null;
+  const locale = await getLocale();
+  const t = (key: MessageKey, vars?: Record<string, string | number>) => translate(locale, key, vars);
+  const query = await searchParams;
+  const linkHost = query.site && LINK_HOSTS.has(query.site) ? query.site : "";
+  const linkError =
+    query.error === "host" && linkHost
+      ? t("profile.linkHost", { host: linkHost })
+      : query.error === "invalid" || query.error === "host"
+        ? t("profile.linkInvalid")
+        : null;
   const { data: workRows } = await supabase
     .from("portfolio_items")
-    .select("id, title, image_url, url")
+    .select("id, title, description, image_url, image_urls, url, position")
     .eq("freelancer_id", user.id)
-    .order("created_at", { ascending: false });
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
   const work: PortfolioItem[] = ((workRows ?? []) as {
     id: string;
     title: string;
+    description: string | null;
     image_url: string | null;
+    image_urls: string[] | null;
     url: string | null;
-  }[]).map((item) => ({
-    id: item.id,
-    title: item.title,
-    imageUrl: item.image_url,
-    url: item.url,
-  }));
+  }[]).map((item) => {
+    const images = (item.image_urls ?? []).filter(Boolean);
+    const cover = images[0] ?? item.image_url;
+    return {
+      id: item.id,
+      title: item.title,
+      summary: item.description,
+      imageUrl: cover,
+      images: images.length > 0 ? images : cover ? [cover] : [],
+      url: item.url,
+    };
+  });
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -110,6 +137,11 @@ export default async function ProfilePage() {
         </CardHeader>
         <CardContent>
           <form action={upsertProfile} className="grid gap-5">
+            {linkError ? (
+              <p role="alert" className="text-sm text-destructive">
+                {linkError}
+              </p>
+            ) : null}
             <div className="grid gap-2">
               <Label htmlFor="display_name">Name</Label>
               <Input
@@ -228,13 +260,37 @@ export default async function ProfilePage() {
                 className="h-10"
               />
             </div>
+            <fieldset className="grid gap-4">
+              <legend className="text-sm font-medium">{t("profile.links")}</legend>
+              {(
+                [
+                  ["website", "profile.website", "https://"],
+                  ["behance", "profile.behance", "https://www.behance.net/"],
+                  ["github", "profile.github", "https://github.com/"],
+                  ["linkedin", "profile.linkedin", "https://www.linkedin.com/in/"],
+                  ["instagram", "profile.instagram", "https://www.instagram.com/"],
+                ] as const
+              ).map(([name, label, placeholder]) => (
+                <div key={name} className="grid gap-2">
+                  <Label htmlFor={name}>{t(label)}</Label>
+                  <Input
+                    id={name}
+                    name={name}
+                    inputMode="url"
+                    defaultValue={profile?.[name] ?? ""}
+                    placeholder={placeholder}
+                    className="h-10"
+                  />
+                </div>
+              ))}
+            </fieldset>
             <Button type="submit" className="h-11 px-5 sm:w-fit">
               Save profile
             </Button>
           </form>
         </CardContent>
       </Card>
-      <PortfolioManager items={work} />
+      {profile?.is_sample ? null : <PortfolioManager items={work} />}
     </main>
   );
 }

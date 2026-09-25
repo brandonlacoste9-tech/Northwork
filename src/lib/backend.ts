@@ -44,6 +44,11 @@ export type ProfileRow = {
   stripe_account_id?: string | null;
   email_confirmed?: boolean | null;
   is_sample?: boolean | null;
+  website?: string | null;
+  behance?: string | null;
+  github?: string | null;
+  linkedin?: string | null;
+  instagram?: string | null;
   created_at: string;
 };
 
@@ -127,6 +132,13 @@ export function mapProfileToFreelancer(row: ProfileRow): Freelancer {
     bio: row.bio?.trim() || "",
     sampleWork: [],
     avatarUrl: row.avatar_url,
+    links: {
+      website: row.website,
+      behance: row.behance,
+      github: row.github,
+      linkedin: row.linkedin,
+      instagram: row.instagram,
+    },
   };
 }
 

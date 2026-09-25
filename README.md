@@ -52,3 +52,9 @@ npm run dev -- --hostname 0.0.0.0 --port 43127
 - Post a project. Empty fields are rejected. A valid project shows up on the job board immediately.
 
 The talent and job directories pause briefly while they load. If a search matches nothing, the page shows an empty state. Add `?error=1` to `/talent` or `/jobs` to see the error state, then use Retry.
+
+## Email confirmation
+
+Signup on the linked Supabase project requires email confirmation. Auth settings report `mailer_autoconfirm: false` and email signups enabled. A fresh signup from this environment returned `email rate limit exceeded`, and there is no inbox here to open a confirmation link, so the full confirm-then-login walkthrough could not be finished. Confirmation was left on.
+
+Supabase email templates still use the dashboard defaults. This environment has no Management API token, so the templates were not restyled to the Northwork name.

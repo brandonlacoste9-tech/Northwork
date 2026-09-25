@@ -14,10 +14,12 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useT } from "@/components/locale-provider";
 import { isSupabaseConfigured } from "@/lib/backend";
 import { createClient } from "@/lib/supabase/client";
 
 export default function SignupPage() {
+  const t = useT();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,9 +31,7 @@ export default function SignupPage() {
       <main className="mx-auto max-w-md px-4 py-16">
         <Card>
           <CardHeader>
-            <CardTitle className="font-heading text-2xl">
-              Accounts are off in preview
-            </CardTitle>
+            <CardTitle className="font-heading text-2xl">{t("login.preview")}</CardTitle>
             <CardDescription>
               This copy of Northernwork is running on sample data. Connect a
               Supabase project to enable accounts — see the README.
@@ -63,9 +63,7 @@ export default function SignupPage() {
     <main className="mx-auto max-w-md px-4 py-16">
       <Card>
         <CardHeader>
-          <CardTitle className="font-heading text-3xl">
-            Join Northernwork
-          </CardTitle>
+          <CardTitle className="font-heading text-3xl">{t("signup.title")}</CardTitle>
           <CardDescription>
             One account for hiring and for getting hired. Rates in CAD, work
             in Canada.
@@ -80,7 +78,7 @@ export default function SignupPage() {
           </div>
           <form onSubmit={onSubmit} className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t("login.email")}</Label>
               <Input
                 id="email"
                 type="email"
@@ -92,7 +90,7 @@ export default function SignupPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t("login.password")}</Label>
               <Input
                 id="password"
                 type="password"
@@ -110,11 +108,12 @@ export default function SignupPage() {
               </p>
             ) : null}
             <Button type="submit" disabled={loading} className="h-11">
-              {loading ? "Creating account…" : "Create account"}
+              {loading ? "Creating account…" : t("signup.submit")}
             </Button>
           </form>
+          <p className="text-sm text-muted-foreground">{t("signup.confirm")}</p>
           <p className="mt-4 text-sm text-muted-foreground">
-            Already have an account?{" "}
+            {t("signup.switch")}{" "}
             <Link href="/login" className="font-medium text-primary hover:underline">
               Sign in
             </Link>

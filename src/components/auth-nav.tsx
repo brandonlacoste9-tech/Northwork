@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { listConversations, signOut } from "@/lib/actions";
 import { isSupabaseConfigured } from "@/lib/backend";
+import { translate } from "@/lib/i18n";
+import { getLocale } from "@/lib/locale";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -10,6 +12,8 @@ import { createClient } from "@/lib/supabase/server";
  */
 export async function AuthNav() {
   if (!isSupabaseConfigured()) return null;
+  const locale = await getLocale();
+  const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
 
   const supabase = await createClient();
   const {
@@ -20,10 +24,10 @@ export async function AuthNav() {
     return (
       <>
         <Button asChild variant="ghost" className="h-10 px-4">
-          <Link href="/login">Log in</Link>
+          <Link href="/login">{t("nav.login")}</Link>
         </Button>
         <Button asChild variant="outline" className="h-10 px-4">
-          <Link href="/signup">Sign up</Link>
+          <Link href="/signup">{t("nav.signup")}</Link>
         </Button>
       </>
     );
@@ -31,14 +35,30 @@ export async function AuthNav() {
 
   const conversations = await listConversations();
   const unread = conversations.reduce((sum, item) => sum + item.unread, 0);
+  const { count } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .is("read_at", null);
 
   return (
     <>
       <Link
+        href="/notifications"
+        className="text-sm font-medium text-foreground/80 hover:text-foreground"
+      >
+        {t("nav.alerts")}
+        {(count ?? 0) > 0 ? (
+          <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-xs text-primary-foreground">
+            {count}
+          </span>
+        ) : null}
+      </Link>
+      <Link
         href="/messages"
         className="text-sm font-medium text-foreground/80 hover:text-foreground"
       >
-        Inbox
+        {t("nav.inbox")}
         {unread > 0 ? (
           <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-xs text-primary-foreground">
             {unread}
@@ -49,11 +69,11 @@ export async function AuthNav() {
         href="/profile"
         className="text-sm font-medium text-foreground/80 hover:text-foreground"
       >
-        My profile
+        {t("nav.profile")}
       </Link>
       <form action={signOut}>
         <Button type="submit" variant="ghost" className="h-10 px-4">
-          Sign out
+          {t("nav.signout")}
         </Button>
       </form>
     </>

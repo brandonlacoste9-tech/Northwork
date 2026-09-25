@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { DirectoryEmpty } from "@/components/directory-state";
-import { InviteDialog } from "@/components/invite-dialog";
+import { InviteDialog, type InviteJob } from "@/components/invite-dialog";
 import { PersonAvatar } from "@/components/person-avatar";
+import { TrustBadge } from "@/components/trust-badge";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -26,9 +27,16 @@ export type ProfileReview = {
 export function FreelancerProfile({
   person,
   reviews,
+  invite,
 }: {
   person: Freelancer;
   reviews?: ProfileReview[];
+  invite?: {
+    configured: boolean;
+    signedIn: boolean;
+    self: boolean;
+    jobs: InviteJob[];
+  };
 }) {
   return (
     <article className="mx-auto max-w-3xl px-4 py-10">
@@ -55,7 +63,8 @@ export function FreelancerProfile({
               {person.city}, {person.province}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              {person.verified ? <Badge variant="secondary">Verified</Badge> : null}
+              {person.sample ? <TrustBadge kind="sample" /> : null}
+              {person.verified ? <TrustBadge kind="verified" /> : null}
               <Badge variant="outline">{person.availability}</Badge>
               {person.completedCount ? (
                 <Badge variant="outline">
@@ -83,7 +92,15 @@ export function FreelancerProfile({
               {memberSinceLabel(person.memberSince)}
             </p>
           ) : null}
-          <InviteDialog freelancerName={person.name} />
+          {person.sample || invite?.self ? null : (
+            <InviteDialog
+              freelancerId={person.id}
+              freelancerName={person.name}
+              configured={invite?.configured ?? false}
+              signedIn={invite?.signedIn ?? false}
+              jobs={invite?.jobs ?? []}
+            />
+          )}
         </div>
       </header>
       <section className="mt-10">

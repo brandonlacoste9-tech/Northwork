@@ -2,7 +2,6 @@ import {
   isSupabaseConfigured,
   mapJobRowToJob,
   mapProfileToFreelancer,
-  profileIsPublished,
   type JobRow,
   type ProfileRow,
 } from "@/lib/backend";
@@ -10,6 +9,7 @@ import type { Freelancer, Job, PortfolioItem } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 
 type ProposalCountRow = { job_id: string; proposal_count: number | string };
+type PaidCountRow = { profile_id: string; paid_count: number | string };
 type CompletedCountRow = { profile_id: string; completed_count: number | string };
 type PortfolioRow = {
   id: string;
@@ -30,19 +30,26 @@ async function enrichJobs(
 ): Promise<Job[]> {
   if (rows.length === 0) return [];
   const clientIds = [...new Set(rows.map((row) => row.client_id))];
-  const [{ data: profiles }, { data: counts }, { data: openRows }] = await Promise.all([
+  const [{ data: profiles }, { data: counts }, { data: openRows }, { data: paid }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("id, display_name, city, province, created_at")
+      .select("id, display_name, city, province, created_at, email_confirmed, is_sample")
       .in("id", clientIds),
     supabase.rpc("proposal_counts", { job_ids: rows.map((row) => row.id) }),
     supabase.from("jobs").select("client_id").eq("status", "open").in("client_id", clientIds),
+    supabase.rpc("paid_project_counts", { profile_ids: clientIds }),
   ]);
   const profileById = new Map(
     (
       (profiles ?? []) as Pick<
         ProfileRow,
-        "id" | "display_name" | "city" | "province" | "created_at"
+        | "id"
+        | "display_name"
+        | "city"
+        | "province"
+        | "created_at"
+        | "email_confirmed"
+        | "is_sample"
       >[]
     ).map((profile) => [profile.id, profile]),
   );
@@ -56,16 +63,24 @@ async function enrichJobs(
   for (const row of (openRows ?? []) as { client_id: string }[]) {
     openByClient.set(row.client_id, (openByClient.get(row.client_id) ?? 0) + 1);
   }
-  return rows.map((row) => {
+  const paidById = new Map(
+    ((paid ?? []) as PaidCountRow[]).map((row) => [row.profile_id, asCount(row.paid_count)]),
+  );
+  const jobs = rows.map((row) => {
     const profile = profileById.get(row.client_id);
+    const sample = Boolean(profile?.is_sample);
+    const paidCount = paidById.get(row.client_id) ?? 0;
     return mapJobRowToJob(row, {
       client: profile?.display_name?.trim() || "A Northernwork client",
-      clientVerified: profile ? profileIsPublished(profile) : false,
+      clientVerified: Boolean(profile?.email_confirmed) && paidCount > 0 && !sample,
+      clientSample: sample,
       clientMemberSince: profile?.created_at ?? null,
       clientOpenJobs: openByClient.get(row.client_id) ?? 0,
       proposalCount: pitches.get(row.id) ?? 0,
     });
   });
+  const real = jobs.filter((job) => !job.clientSample);
+  return real.length > 0 ? real : jobs;
 }
 
 export async function loadOpenJobs(): Promise<Job[] | undefined> {
@@ -96,9 +111,10 @@ async function annotateTalent(
 ): Promise<Freelancer[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((row) => row.id);
-  const [{ data: reviews }, { data: completed }, portfolioResult] = await Promise.all([
+  const [{ data: reviews }, { data: completed }, { data: paid }, portfolioResult] = await Promise.all([
     supabase.from("reviews").select("reviewee_id, rating").in("reviewee_id", ids),
     supabase.rpc("completed_project_counts", { profile_ids: ids }),
+    supabase.rpc("paid_project_counts", { profile_ids: ids }),
     withPortfolio
       ? supabase
           .from("portfolio_items")
@@ -119,6 +135,9 @@ async function annotateTalent(
       asCount(row.completed_count),
     ]),
   );
+  const paidById = new Map(
+    ((paid ?? []) as PaidCountRow[]).map((row) => [row.profile_id, asCount(row.paid_count)]),
+  );
   const portfolioById = new Map<string, PortfolioItem[]>();
   for (const item of (portfolioResult.data ?? []) as PortfolioRow[]) {
     const list = portfolioById.get(item.freelancer_id) ?? [];
@@ -135,13 +154,15 @@ async function annotateTalent(
     const person = mapProfileToFreelancer(row);
     const average =
       scores.length > 0 ? scores.reduce((sum, score) => sum + score, 0) / scores.length : null;
+    const sample = Boolean(row.is_sample);
     return {
       ...person,
       rating: average,
       reviewCount: scores.length,
       completedCount: completedById.get(row.id) ?? 0,
       memberSince: row.created_at,
-      verified: profileIsPublished(row),
+      verified: Boolean(row.email_confirmed) && (paidById.get(row.id) ?? 0) > 0 && !sample,
+      sample,
       portfolio: portfolioById.get(row.id) ?? [],
     };
   });
@@ -154,7 +175,9 @@ export async function loadTalentDirectory(): Promise<Freelancer[] | undefined> {
     .from("profiles")
     .select("*")
     .order("created_at", { ascending: false });
-  return annotateTalent(supabase, (data ?? []) as ProfileRow[], false);
+  const people = await annotateTalent(supabase, (data ?? []) as ProfileRow[], false);
+  const real = people.filter((person) => !person.sample);
+  return real.length > 0 ? real : people;
 }
 
 export async function loadTalent(id: string): Promise<Freelancer | null> {

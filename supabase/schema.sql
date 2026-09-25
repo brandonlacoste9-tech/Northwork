@@ -639,3 +639,221 @@ create policy "portfolio: delete own folder"
     and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
+-- ------------------------------------------------ invites, alerts, trust, tax
+alter table public.profiles add column if not exists email_confirmed boolean not null default false;
+alter table public.profiles add column if not exists is_sample boolean not null default false;
+
+alter table public.payments add column if not exists subtotal_cad numeric(10, 2);
+alter table public.payments add column if not exists tax_cad numeric(10, 2);
+alter table public.payments add column if not exists tax_label text;
+
+-- A client may open a thread to invite a freelancer before any pitch exists.
+drop policy if exists "conversations: participants insert" on public.conversations;
+create policy "conversations: participants insert"
+  on public.conversations for insert
+  to authenticated
+  with check (
+    (select auth.uid()) in (client_id, freelancer_id)
+    and exists (
+      select 1 from public.jobs j
+      where j.id = job_id
+        and j.client_id = client_id
+    )
+    and (
+      (select auth.uid()) = client_id
+      or exists (
+        select 1 from public.proposals p
+        where p.job_id = conversations.job_id
+          and p.freelancer_id = conversations.freelancer_id
+          and p.status in ('pending', 'accepted')
+      )
+    )
+  );
+
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  kind text not null,
+  body text not null,
+  href text,
+  created_at timestamptz not null default now(),
+  read_at timestamptz
+);
+
+alter table public.notifications enable row level security;
+
+drop policy if exists "notifications: own read" on public.notifications;
+create policy "notifications: own read"
+  on public.notifications for select
+  to authenticated
+  using (user_id = (select auth.uid()));
+
+drop policy if exists "notifications: own update" on public.notifications;
+create policy "notifications: own update"
+  on public.notifications for update
+  to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+create index if not exists notifications_user_idx
+  on public.notifications (user_id, created_at desc);
+
+grant select, update on table public.notifications to authenticated;
+
+create or replace function public.add_notification(
+  target uuid,
+  kind text,
+  body text,
+  href text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller uuid := auth.uid();
+  allowed boolean;
+begin
+  if caller is null or target is null or caller = target then
+    return;
+  end if;
+  if kind not in (
+    'invite', 'pitch', 'hire', 'decline', 'message',
+    'payment_held', 'payment_released', 'payment_refunded'
+  ) then
+    raise exception 'Unknown alert';
+  end if;
+  select exists (
+    select 1 from public.conversations c
+    where caller in (c.client_id, c.freelancer_id)
+      and target in (c.client_id, c.freelancer_id)
+  ) or exists (
+    select 1
+    from public.proposals p
+    join public.jobs j on j.id = p.job_id
+    where (j.client_id = caller and p.freelancer_id = target)
+       or (p.freelancer_id = caller and j.client_id = target)
+  ) into allowed;
+  if not allowed then
+    raise exception 'Not allowed';
+  end if;
+  insert into public.notifications (user_id, kind, body, href)
+  values (target, kind, left(coalesce(body, ''), 500), href);
+end;
+$$;
+
+revoke all on function public.add_notification(uuid, text, text, text) from public;
+grant execute on function public.add_notification(uuid, text, text, text) to authenticated;
+
+create or replace function public.party_email(target uuid)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  caller uuid := auth.uid();
+  allowed boolean;
+  result text;
+begin
+  if caller is null or target is null or caller = target then
+    return null;
+  end if;
+  select exists (
+    select 1 from public.conversations c
+    where caller in (c.client_id, c.freelancer_id)
+      and target in (c.client_id, c.freelancer_id)
+  ) or exists (
+    select 1
+    from public.proposals p
+    join public.jobs j on j.id = p.job_id
+    where (j.client_id = caller and p.freelancer_id = target)
+       or (p.freelancer_id = caller and j.client_id = target)
+  ) into allowed;
+  if not allowed then
+    return null;
+  end if;
+  select u.email into result from auth.users u where u.id = target;
+  return result;
+end;
+$$;
+
+revoke all on function public.party_email(uuid) from public;
+grant execute on function public.party_email(uuid) to authenticated;
+
+create or replace function public.paid_project_counts(profile_ids uuid[])
+returns table (profile_id uuid, paid_count bigint)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select x.profile_id, count(distinct x.payment_id)::bigint
+  from (
+    select p.client_id as profile_id, p.id as payment_id
+    from public.payments p
+    where p.status = 'released'
+      and p.client_id = any (profile_ids)
+    union
+    select p.freelancer_id, p.id
+    from public.payments p
+    where p.status = 'released'
+      and p.freelancer_id = any (profile_ids)
+  ) x
+  group by x.profile_id;
+$$;
+
+revoke all on function public.paid_project_counts(uuid[]) from public;
+grant execute on function public.paid_project_counts(uuid[]) to anon, authenticated;
+
+create or replace function public.sync_email_confirmed()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.profiles
+     set email_confirmed = new.email_confirmed_at is not null
+   where id = new.id;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_confirmed on auth.users;
+create trigger on_auth_user_confirmed
+  after insert or update of email_confirmed_at on auth.users
+  for each row
+  execute function public.sync_email_confirmed();
+
+update public.profiles p
+   set email_confirmed = true
+  from auth.users u
+ where u.id = p.id
+   and u.email_confirmed_at is not null;
+
+update public.profiles
+   set is_sample = true
+ where display_name in (
+   'Amélie Gagnon',
+   'Jordan Okonkwo',
+   'Priya Sandhu',
+   'Noah MacLeod',
+   'Camille Bergeron',
+   'Ethan Chen',
+   'Sofia Alvarez',
+   'Malik Hassan',
+   'Hannah Reid',
+   'Luca Moretti',
+   'Owen Fraser',
+   'Nadia Bélanger',
+   'Théo Nguyen',
+   'Grace Kim',
+   'Samuel Tremblay',
+   'Leah Nitsiza',
+   'Aisha Rahman'
+ );
+
+

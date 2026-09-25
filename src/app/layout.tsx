@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Fraunces, Source_Sans_3 } from "next/font/google";
 import { AuthNav } from "@/components/auth-nav";
+import { LocaleProvider } from "@/components/locale-provider";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { getLocale } from "@/lib/locale";
 import { MarketplaceProvider } from "@/lib/marketplace";
 import "./globals.css";
 
@@ -36,18 +38,21 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const locale = await getLocale();
   return (
     <html
-      lang="en-CA"
+      lang={locale === "fr" ? "fr-CA" : "en-CA"}
       className={`${sans.variable} ${heading.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <MarketplaceProvider>
-          <SiteHeader authNav={<AuthNav />} />
-          <div className="flex-1">{children}</div>
-          <SiteFooter />
-        </MarketplaceProvider>
+        <LocaleProvider locale={locale}>
+          <MarketplaceProvider>
+            <SiteHeader authNav={<AuthNav />} />
+            <div className="flex-1">{children}</div>
+            <SiteFooter />
+          </MarketplaceProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

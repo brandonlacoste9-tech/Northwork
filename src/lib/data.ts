@@ -79,6 +79,7 @@ export type Freelancer = {
   completedCount?: number;
   memberSince?: string | null;
   verified?: boolean;
+  sample?: boolean;
   portfolio?: PortfolioItem[];
 };
 
@@ -100,6 +101,7 @@ export type Job = {
   postedLocally?: boolean;
   proposalCount?: number;
   clientVerified?: boolean;
+  clientSample?: boolean;
   clientMemberSince?: string | null;
   clientOpenJobs?: number;
 };
@@ -645,7 +647,7 @@ const sampleTrust: Array<Pick<Freelancer, "rating" | "reviewCount" | "completedC
 ];
 
 freelancers.forEach((person, index) => {
-  Object.assign(person, sampleTrust[index], { verified: true });
+  Object.assign(person, sampleTrust[index], { verified: false, sample: true });
 });
 
 const jobFacts: Record<string, Partial<Job>> = {
@@ -653,7 +655,8 @@ const jobFacts: Record<string, Partial<Job>> = {
     budgetType: "fixed",
     duration: "8–10 weeks",
     proposalCount: 4,
-    clientVerified: true,
+    clientVerified: false,
+    clientSample: true,
     clientMemberSince: "2021-03-01",
     clientOpenJobs: 1,
   },
@@ -661,7 +664,8 @@ const jobFacts: Record<string, Partial<Job>> = {
     budgetType: "fixed",
     duration: "3 weeks",
     proposalCount: 2,
-    clientVerified: true,
+    clientVerified: false,
+    clientSample: true,
     clientMemberSince: "2022-09-01",
     clientOpenJobs: 1,
   },
@@ -669,7 +673,8 @@ const jobFacts: Record<string, Partial<Job>> = {
     budgetType: "hourly",
     duration: "About 80 hours",
     proposalCount: 3,
-    clientVerified: true,
+    clientVerified: false,
+    clientSample: true,
     clientMemberSince: "2024-02-01",
     clientOpenJobs: 1,
   },
@@ -677,7 +682,8 @@ const jobFacts: Record<string, Partial<Job>> = {
     budgetType: "fixed",
     duration: "12 weeks",
     proposalCount: 1,
-    clientVerified: true,
+    clientVerified: false,
+    clientSample: true,
     clientMemberSince: "2020-11-01",
     clientOpenJobs: 1,
   },
@@ -685,7 +691,8 @@ const jobFacts: Record<string, Partial<Job>> = {
     budgetType: "fixed",
     duration: "6 weeks",
     proposalCount: 2,
-    clientVerified: true,
+    clientVerified: false,
+    clientSample: true,
     clientMemberSince: "2019-05-01",
     clientOpenJobs: 1,
   },
@@ -693,7 +700,8 @@ const jobFacts: Record<string, Partial<Job>> = {
     budgetType: "fixed",
     duration: "2 weeks",
     proposalCount: 5,
-    clientVerified: true,
+    clientVerified: false,
+    clientSample: true,
     clientMemberSince: "2023-07-01",
     clientOpenJobs: 1,
   },
@@ -701,7 +709,8 @@ const jobFacts: Record<string, Partial<Job>> = {
     budgetType: "fixed",
     duration: "3 months",
     proposalCount: 3,
-    clientVerified: true,
+    clientVerified: false,
+    clientSample: true,
     clientMemberSince: "2018-04-01",
     clientOpenJobs: 1,
   },
@@ -709,7 +718,8 @@ const jobFacts: Record<string, Partial<Job>> = {
     budgetType: "fixed",
     duration: "5 weeks",
     proposalCount: 1,
-    clientVerified: true,
+    clientVerified: false,
+    clientSample: true,
     clientMemberSince: "2022-01-01",
     clientOpenJobs: 1,
   },

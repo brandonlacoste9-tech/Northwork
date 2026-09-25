@@ -37,15 +37,16 @@ Apply `supabase/schema.sql` in the Supabase SQL editor (or with the pooler). It 
 - `profiles` — public freelancer profiles, including `avatar_url` and `stripe_account_id`.
 - `jobs` — projects in CAD. Status is `open`, `in_progress`, or `closed`. Optional `budget_max_cad` and `duration`.
 - `proposals` — one pitch per freelancer per job (`pending`, `accepted`, `declined`).
-- `conversations` and `messages` — one thread per accepted pitch. Messages are realtime.
+- `conversations` and `messages` — one thread per project and freelancer. A client can open it with an invite before any pitch. Messages are realtime.
 - `conversation_reads` — unread counts in the inbox.
 - `reviews` — one review per person per closed job, rating 1–5.
 - `payments` — escrow rows (`held`, `released`, `refunded`).
 - `stripe_events` — processed webhook event ids, so a replay does not apply twice. RLS is on and there are no policies, so only the database connection used by the webhook can write it.
 - `portfolio_items` — work samples on a freelancer profile. Public read, owner write.
 - Storage buckets `avatars` and `portfolio` — public read, writes only under `{user-id}/`.
+- `notifications` — in-app alerts for an invite, pitch, hire, decline, message, or payment. A person can read and mark their own. Inserts go through `add_notification`.
 
-`proposal_counts` and `completed_project_counts` are security-definer functions so the board can show pitch and completed counts without opening private rows.
+`proposal_counts`, `completed_project_counts`, and `paid_project_counts` are security-definer functions so the board can show counts without opening private rows. `party_email` returns an address only to someone who already shares a thread or a pitch with that person.
 
 ## Messaging
 
@@ -57,11 +58,23 @@ Escrow is Stripe Connect in test mode. Nothing is charged until `STRIPE_SECRET_K
 
 1. A freelancer connects an Express account at `/settings/payouts`.
 2. On an in-progress project the client funds escrow. Stripe creates a manual-capture PaymentIntent in CAD. The card form authorizes a hold.
-3. Release captures the payment and sends it to the freelancer minus a 5% platform fee.
+3. Release captures the payment and sends it to the freelancer minus a 5% platform fee. The client authorizes the project amount plus GST, HST, or GST+QST on that fee only (Ontario and the Atlantic provinces use HST, Quebec uses GST+QST, everyone else GST). The place of supply is the project province, or the client's province when the work is remote. It is an estimate, not tax advice.
 4. While the payment is still held, the client can refund it (the uncaptured PaymentIntent is cancelled).
 5. `POST /api/webhooks/stripe` checks the signature and updates `payments` from `payment_intent.amount_capturable_updated`, `payment_intent.succeeded`, `payment_intent.payment_failed`, and `charge.refunded`.
 
-A full test-mode charge was not run here because no Stripe secret key was provided.
+A full test-mode charge was not run here because no Stripe secret key was provided, and `DATABASE_URL` has no database password.
+
+## Invites and alerts
+
+From a freelancer profile, a signed-in client picks one of their open projects and sends a note. That creates the thread (a pitch is not required first) and an in-app alert. Sample profiles cannot be invited. The same alerts fire for a pitch, a hire, a decline, a message, and escrow. Email is sent only when both `RESEND_API_KEY` and `NOTIFICATION_FROM` are set. Otherwise the alert stays on `/notifications`.
+
+## Trust
+
+Verified means the email is confirmed and at least one payment has been released. A city and province on the profile are not enough. Profiles whose names match the sample set are marked Sample. They stay visible only while the directory has no real profiles, and they cannot be hired. Terms are at `/terms` (disputes at `/terms#disputes`) and privacy at `/privacy`.
+
+## French
+
+The header switch stores a `locale` cookie (`en` or `fr`) and translates the navigation, home page, invites, escrow, and alerts. Signup confirmation mail is still the English Supabase template.
 
 ## Google sign-in
 

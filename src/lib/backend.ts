@@ -44,6 +44,8 @@ export type ProfileRow = {
   province: string | null;
   availability: string | null;
   stripe_account_id?: string | null;
+  email_confirmed?: boolean | null;
+  is_sample?: boolean | null;
   created_at: string;
 };
 
@@ -145,6 +147,7 @@ export function mapJobRowToJob(
       Job,
       | "client"
       | "clientVerified"
+      | "clientSample"
       | "clientMemberSince"
       | "clientOpenJobs"
       | "proposalCount"
@@ -170,6 +173,7 @@ export function mapJobRowToJob(
     postedLabel: timeAgo(row.created_at),
     client: extra?.client?.trim() || "A Northernwork client",
     clientVerified: extra?.clientVerified ?? false,
+    clientSample: extra?.clientSample ?? false,
     clientMemberSince: extra?.clientMemberSince ?? null,
     clientOpenJobs: extra?.clientOpenJobs ?? 0,
     proposalCount: extra?.proposalCount ?? 0,

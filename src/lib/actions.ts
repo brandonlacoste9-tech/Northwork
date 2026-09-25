@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { notifyUser } from "@/lib/notify";
 
 function parseSkills(raw: FormDataEntryValue | null): string[] {
   return String(raw ?? "")
@@ -213,6 +214,22 @@ export async function sendMessage(conversationId: string, formData: FormData) {
     .single();
   if (error) return { error: error.message };
 
+  const { data: conversation } = await supabase
+    .from("conversations")
+    .select("client_id, freelancer_id")
+    .eq("id", conversationId)
+    .maybeSingle();
+  if (conversation) {
+    const otherId =
+      conversation.client_id === user.id ? conversation.freelancer_id : conversation.client_id;
+    await notifyUser(supabase, {
+      userId: otherId as string,
+      kind: "message",
+      body,
+      href: `/messages/${conversationId}`,
+    });
+  }
+
   revalidatePath("/messages");
   revalidatePath(`/messages/${conversationId}`);
   return { message: data as ThreadMessage };
@@ -237,6 +254,85 @@ export async function signOut() {
   await supabase.auth.signOut();
   revalidatePath("/");
   redirect("/");
+}
+
+export async function markNotificationsRead() {
+  const { supabase, user } = await requireUser();
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("user_id", user.id)
+    .is("read_at", null);
+  if (error) throw new Error(error.message);
+  revalidatePath("/notifications");
+  revalidatePath("/");
+}
+
+/** Client invites a freelancer onto one of their own projects and opens the thread. */
+export async function inviteFreelancer(freelancerId: string, jobId: string, note: string) {
+  const { supabase, user } = await requireUser();
+  const body = note.trim();
+  if (!body) return { error: "Add a note about the work." };
+  if (body.length > 4000) return { error: "Keep the note under 4,000 characters." };
+  if (freelancerId === user.id) return { error: "You cannot invite yourself." };
+
+  await ensureOwnProfile(supabase, user.id);
+  const { data: freelancer } = await supabase
+    .from("profiles")
+    .select("id, is_sample, display_name")
+    .eq("id", freelancerId)
+    .maybeSingle();
+  if (!freelancer) return { error: "That person does not have a profile yet." };
+  if (freelancer.is_sample) return { error: "Sample profiles cannot be hired." };
+
+  const { data: job, error: jobError } = await supabase
+    .from("jobs")
+    .select("id, title, client_id, status")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (jobError) return { error: jobError.message };
+  if (!job || job.client_id !== user.id) return { error: "Choose one of your projects." };
+  if (job.status === "closed") return { error: "That project is closed." };
+
+  const { data: existing } = await supabase
+    .from("conversations")
+    .select("id")
+    .eq("job_id", jobId)
+    .eq("freelancer_id", freelancerId)
+    .maybeSingle();
+
+  let conversationId = existing?.id as string | undefined;
+  if (!conversationId) {
+    const { data: created, error } = await supabase
+      .from("conversations")
+      .insert({
+        job_id: jobId,
+        client_id: user.id,
+        freelancer_id: freelancerId,
+      })
+      .select("id")
+      .single();
+    if (error) return { error: error.message };
+    conversationId = created.id as string;
+  }
+
+  const message = `Invitation — ${job.title}\n\n${body}`;
+  const { error: messageError } = await supabase.from("messages").insert({
+    conversation_id: conversationId,
+    sender_id: user.id,
+    body: message.slice(0, 5000),
+  });
+  if (messageError) return { error: messageError.message };
+
+  await notifyUser(supabase, {
+    userId: freelancerId,
+    kind: "invite",
+    body: String(job.title),
+    href: `/messages/${conversationId}`,
+  });
+  revalidatePath("/messages");
+  revalidatePath(`/messages/${conversationId}`);
+  return { conversationId };
 }
 
 /** Create or update the current user's freelancer profile. */
@@ -309,6 +405,19 @@ export async function createProposal(jobId: string, formData: FormData) {
   });
 
   if (error) throw new Error(error.message);
+  const { data: job } = await supabase
+    .from("jobs")
+    .select("client_id, title")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (job && job.client_id !== user.id) {
+    await notifyUser(supabase, {
+      userId: job.client_id as string,
+      kind: "pitch",
+      body: String(job.title ?? "Project"),
+      href: `/jobs/${jobId}`,
+    });
+  }
   revalidatePath(`/jobs/${jobId}`);
 }
 
@@ -354,9 +463,21 @@ export async function setProposalStatus(
     revalidatePath(`/jobs/${jobId}`);
     revalidatePath("/jobs");
     const conversationId = await openConversation(jobId, proposal.freelancer_id);
+    await notifyUser(supabase, {
+      userId: proposal.freelancer_id as string,
+      kind: "hire",
+      body: "The client accepted your pitch.",
+      href: `/messages/${conversationId}`,
+    });
     redirect(`/messages/${conversationId}`);
   }
 
+  await notifyUser(supabase, {
+    userId: proposal.freelancer_id as string,
+    kind: "decline",
+    body: "The client declined your pitch.",
+    href: `/jobs/${jobId}`,
+  });
   revalidatePath(`/jobs/${jobId}`);
 }
 

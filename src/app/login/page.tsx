@@ -14,16 +14,24 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useT } from "@/components/locale-provider";
 import { isSupabaseConfigured } from "@/lib/backend";
 import { createClient } from "@/lib/supabase/client";
 
+function safeNext(raw: string | null) {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return "/";
+  return raw;
+}
+
 function LoginForm() {
+  const t = useT();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const searchParams = useSearchParams();
+  const next = safeNext(searchParams.get("next"));
   const googleError =
     searchParams.get("error") === "google"
       ? "Google sign-in did not finish. Try again, or use your email and password."
@@ -34,9 +42,7 @@ function LoginForm() {
       <main className="mx-auto max-w-md px-4 py-16">
         <Card>
           <CardHeader>
-            <CardTitle className="font-heading text-2xl">
-              Accounts are off in preview
-            </CardTitle>
+            <CardTitle className="font-heading text-2xl">{t("login.preview")}</CardTitle>
             <CardDescription>
               This copy of Northernwork is running on sample data. Connect a
               Supabase project to enable accounts — see the README.
@@ -58,7 +64,7 @@ function LoginForm() {
         password,
       });
       if (error) throw error;
-      router.push("/");
+      router.push(next);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed.");
@@ -71,7 +77,7 @@ function LoginForm() {
     <main className="mx-auto max-w-md px-4 py-16">
       <Card>
         <CardHeader>
-          <CardTitle className="font-heading text-3xl">Welcome back</CardTitle>
+          <CardTitle className="font-heading text-3xl">{t("login.title")}</CardTitle>
           <CardDescription>
             Sign in to post projects, pitch on work, and manage your profile.
           </CardDescription>
@@ -90,7 +96,7 @@ function LoginForm() {
           ) : null}
           <form onSubmit={onSubmit} className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t("login.email")}</Label>
               <Input
                 id="email"
                 type="email"
@@ -102,7 +108,7 @@ function LoginForm() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t("login.password")}</Label>
               <Input
                 id="password"
                 type="password"
@@ -119,11 +125,11 @@ function LoginForm() {
               </p>
             ) : null}
             <Button type="submit" disabled={loading} className="h-11">
-              {loading ? "Signing in…" : "Sign in"}
+              {loading ? "Signing in…" : t("login.submit")}
             </Button>
           </form>
           <p className="mt-4 text-sm text-muted-foreground">
-            New here?{" "}
+            {t("login.switch")}{" "}
             <Link href="/signup" className="font-medium text-primary hover:underline">
               Create an account
             </Link>

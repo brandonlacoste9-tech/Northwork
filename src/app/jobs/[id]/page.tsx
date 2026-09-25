@@ -15,6 +15,7 @@ import { isSupabaseConfigured, type ProfileRow, type ProposalRow } from "@/lib/b
 import { getSeedJob } from "@/lib/data";
 import { loadJob } from "@/lib/listings";
 import { isStripeConfigured, stripePublishableKey } from "@/lib/stripe";
+import { placeOfSupply, quoteEscrow } from "@/lib/tax";
 import { createClient } from "@/lib/supabase/server";
 
 type PageProps = {
@@ -192,24 +193,49 @@ export default async function JobPage({ params }: PageProps) {
         .maybeSingle();
       const { data: payment } = await supabase
         .from("payments")
-        .select("status, amount_cad")
+        .select("status, amount_cad, tax_cad, tax_label")
         .eq("job_id", id)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       const paymentRow = payment as { status: "held" | "released" | "refunded"; amount_cad: number | string } | null;
       const amount = Number(hire.bid_cad ?? jobRow.budget_cad);
+      const safeAmount = Number.isFinite(amount) ? amount : null;
+      const { data: clientProfile } = await supabase
+        .from("profiles")
+        .select("province")
+        .eq("id", jobRow.client_id)
+        .maybeSingle();
+      const place = placeOfSupply(
+        jobRow.location,
+        (clientProfile as { province: string | null } | null)?.province,
+      );
+      const quote = safeAmount && safeAmount > 0 ? quoteEscrow(safeAmount, place) : null;
+      const charged = Number(paymentRow?.amount_cad);
       escrowSlot = (
         <EscrowPanel
           jobId={id}
           role={user.id === jobRow.client_id ? "client" : "freelancer"}
-          amountCad={Number.isFinite(amount) ? amount : null}
+          amountCad={safeAmount}
           status={paymentRow?.status ?? null}
           freelancerConnected={Boolean(
             (freelancer as { stripe_account_id: string | null } | null)?.stripe_account_id
           )}
           stripeReady={isStripeConfigured() && Boolean(stripePublishableKey())}
           publishableKey={stripePublishableKey()}
+          subtotalCad={quote?.subtotal ?? safeAmount}
+          feeCad={quote?.fee ?? null}
+          taxCad={
+            paymentRow
+              ? Number((paymentRow as { tax_cad?: number | string | null }).tax_cad ?? quote?.tax ?? 0)
+              : quote?.tax ?? null
+          }
+          taxLabel={
+            (paymentRow as { tax_label?: string | null } | null)?.tax_label ?? quote?.taxLabel ?? null
+          }
+          totalCad={Number.isFinite(charged) && charged > 0 ? charged : quote?.total ?? null}
+          payoutCad={quote?.freelancerReceives ?? null}
+          place={place}
         />
       );
     }

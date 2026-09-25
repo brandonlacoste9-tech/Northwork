@@ -8,6 +8,7 @@ import { loadStripe, type Stripe } from "@stripe/stripe-js";
 import { Button } from "@/components/ui/button";
 import { formatCad } from "@/lib/format";
 import { fundEscrow, recordEscrowHold, refundEscrow, releaseEscrow } from "@/lib/payments";
+import { useT } from "@/components/locale-provider";
 
 const stripeCache = new Map<string, Promise<Stripe | null>>();
 
@@ -28,6 +29,7 @@ function HoldForm({
 }) {
   const stripe = useStripe();
   const elements = useElements();
+  const t = useT();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -69,7 +71,7 @@ function HoldForm({
         </p>
       ) : null}
       <Button type="submit" disabled={pending || !stripe} className="h-11 px-5 sm:w-fit">
-        {pending ? "Authorizing…" : "Authorize hold"}
+        {pending ? t("escrow.authorizing") : t("escrow.authorize")}
       </Button>
     </form>
   );
@@ -83,6 +85,13 @@ export function EscrowPanel({
   freelancerConnected,
   stripeReady,
   publishableKey,
+  subtotalCad,
+  feeCad,
+  taxCad,
+  taxLabel,
+  totalCad,
+  payoutCad,
+  place,
 }: {
   jobId: string;
   role: "client" | "freelancer";
@@ -91,14 +100,33 @@ export function EscrowPanel({
   freelancerConnected: boolean;
   stripeReady: boolean;
   publishableKey: string;
+  subtotalCad?: number | null;
+  feeCad?: number | null;
+  taxCad?: number | null;
+  taxLabel?: string | null;
+  totalCad?: number | null;
+  payoutCad?: number | null;
+  place?: string | null;
 }) {
   const router = useRouter();
+  const t = useT();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
 
   const amountLabel =
     amountCad && amountCad > 0 ? formatCad(amountCad) : "No amount set";
+  const summary =
+    subtotalCad && feeCad != null && taxCad != null && totalCad && payoutCad
+      ? t("escrow.summary", {
+          total: formatCad(totalCad),
+          subtotal: formatCad(subtotalCad),
+          fee: formatCad(feeCad),
+          taxLabel: taxLabel ?? "GST",
+          tax: formatCad(taxCad),
+          payout: formatCad(payoutCad),
+        })
+      : null;
 
   async function run(action: () => Promise<{ error?: string; ok?: boolean } | undefined>) {
     setPending(true);
@@ -111,33 +139,40 @@ export function EscrowPanel({
 
   return (
     <section className="mt-10 border-t pt-8">
-      <h2 className="font-heading text-2xl">Escrow</h2>
+      <h2 className="font-heading text-2xl">{t("escrow.title")}</h2>
+      <p className="mt-2 text-sm text-muted-foreground">{summary ?? amountLabel}</p>
       <p className="mt-2 text-sm text-muted-foreground">
-        {amountLabel}. Funds stay held in CAD until the client releases them. Northernwork keeps a 5% fee on release.
+        {t("escrow.taxNote", { place: place || t("escrow.placeUnknown") })}
+      </p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {t("escrow.dispute")}{" "}
+        <Link href="/terms#disputes" className="font-medium text-primary hover:underline">
+          {t("footer.terms")}
+        </Link>
       </p>
       {status ? (
         <p className="mt-3 text-sm font-medium">
-          Status: {status === "held" ? "Held" : status === "released" ? "Released" : "Refunded"}
+          Status: {status === "held" ? t("escrow.held") : status === "released" ? t("escrow.released") : t("escrow.refunded")}
         </p>
       ) : (
-        <p className="mt-3 text-sm text-muted-foreground">Not funded yet.</p>
+        <p className="mt-3 text-sm text-muted-foreground">{t("escrow.unfunded")}</p>
       )}
       {role === "freelancer" && !freelancerConnected ? (
         <p className="mt-4 text-sm">
           <Link href="/settings/payouts" className="font-medium text-primary hover:underline">
-            Connect payouts
+            {t("escrow.connect")}
           </Link>{" "}
-          before the client can fund this project.
+          {t("escrow.connectAfter")}
         </p>
       ) : null}
       {role === "client" && !stripeReady ? (
         <p className="mt-4 text-sm text-muted-foreground">
-          Funding needs Stripe test keys (STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY). Nothing is charged until those are set.
+          {t("escrow.noStripe")}
         </p>
       ) : null}
       {role === "client" && stripeReady && !freelancerConnected ? (
         <p className="mt-4 text-sm text-muted-foreground">
-          The hired freelancer has not connected payouts yet.
+          {t("escrow.noPayout")}
         </p>
       ) : null}
       {role === "client" && stripeReady && freelancerConnected && !status ? (
@@ -157,7 +192,7 @@ export function EscrowPanel({
               setPending(false);
             }}
           >
-            {pending ? "Starting…" : "Fund escrow"}
+            {pending ? t("escrow.starting") : t("escrow.fund")}
           </Button>
           {clientSecret ? (
             <Elements stripe={stripePromise(publishableKey)} options={{ clientSecret }}>
@@ -180,7 +215,7 @@ export function EscrowPanel({
             disabled={pending || !stripeReady}
             onClick={() => run(() => releaseEscrow(jobId))}
           >
-            Release payment
+            {t("escrow.release")}
           </Button>
           <Button
             type="button"
@@ -189,7 +224,7 @@ export function EscrowPanel({
             disabled={pending || !stripeReady}
             onClick={() => run(() => refundEscrow(jobId))}
           >
-            Request refund
+            {t("escrow.refund")}
           </Button>
         </div>
       ) : null}

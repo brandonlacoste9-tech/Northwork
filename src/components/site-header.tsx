@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { Menu } from "lucide-react";
+import { LanguageSwitch } from "@/components/language-switch";
 import { Logo } from "@/components/logo";
+import { useT } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -13,13 +15,13 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
-const links = [
-  { href: "/talent", label: "Talent" },
-  { href: "/jobs", label: "Jobs" },
-  { href: "/messages", label: "Messages" },
-];
-
 export function SiteHeader({ authNav }: { authNav?: React.ReactNode }) {
+  const t = useT();
+  const links = [
+    { href: "/talent", label: t("nav.talent") },
+    { href: "/jobs", label: t("nav.jobs") },
+    { href: "/messages", label: t("nav.messages") },
+  ];
   return (
     <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
@@ -37,8 +39,9 @@ export function SiteHeader({ authNav }: { authNav?: React.ReactNode }) {
             </Link>
           ))}
           <Button asChild size="lg" className="h-10 px-4">
-            <Link href="/post">Post a project</Link>
+            <Link href="/post">{t("nav.post")}</Link>
           </Button>
+          <LanguageSwitch />
           {authNav}
         </nav>
         <Sheet>
@@ -47,7 +50,7 @@ export function SiteHeader({ authNav }: { authNav?: React.ReactNode }) {
               variant="outline"
               size="icon"
               className="md:hidden"
-              aria-label="Open menu"
+              aria-label={t("nav.menu")}
             >
               <Menu />
             </Button>
@@ -69,9 +72,12 @@ export function SiteHeader({ authNav }: { authNav?: React.ReactNode }) {
               ))}
               <SheetClose asChild>
                 <Button asChild className="mt-3 h-11">
-                  <Link href="/post">Post a project</Link>
+                  <Link href="/post">{t("nav.post")}</Link>
                 </Button>
               </SheetClose>
+              <div className="px-3 py-2">
+                <LanguageSwitch />
+              </div>
               {authNav ? (
                 <div className="mt-3 flex flex-col gap-1 px-3">{authNav}</div>
               ) : null}

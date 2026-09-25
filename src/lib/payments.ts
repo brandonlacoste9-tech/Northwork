@@ -5,13 +5,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import {
-  PLATFORM_FEE_RATE,
   createAccountLink,
   createConnectAccount,
   createLoginLink,
   getStripe,
 } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
+import { notifyUser } from "@/lib/notify";
+import { placeOfSupply, quoteEscrow } from "@/lib/tax";
 
 function friendly(err: unknown) {
   if (err instanceof Error) {
@@ -107,7 +108,7 @@ async function hireForJob(jobId: string) {
   const { supabase, user } = await requireUser();
   const { data: job, error: jobError } = await supabase
     .from("jobs")
-    .select("id, client_id, status, budget_cad")
+    .select("id, client_id, status, budget_cad, location")
     .eq("id", jobId)
     .maybeSingle();
   if (jobError) throw new Error(jobError.message);
@@ -131,6 +132,11 @@ async function hireForJob(jobId: string) {
     .select("stripe_account_id")
     .eq("id", accepted.freelancer_id)
     .maybeSingle();
+  const { data: clientProfile } = await supabase
+    .from("profiles")
+    .select("province")
+    .eq("id", user.id)
+    .maybeSingle();
   const amount = Number(accepted.bid_cad ?? job.budget_cad);
   return {
     supabase,
@@ -140,6 +146,13 @@ async function hireForJob(jobId: string) {
     stripeAccountId: (freelancer as { stripe_account_id: string | null } | null)
       ?.stripe_account_id,
     amount,
+    quote: quoteEscrow(
+      amount,
+      placeOfSupply(
+        job.location as string | null,
+        (clientProfile as { province: string | null } | null)?.province,
+      ),
+    ),
   };
 }
 
@@ -161,8 +174,9 @@ export async function fundEscrow(jobId: string) {
       .maybeSingle();
     if (existing) return { error: "This project already has escrow funds." };
 
-    const amountCents = Math.round(hire.amount * 100);
-    const feeCents = Math.round(amountCents * PLATFORM_FEE_RATE);
+    const quote = hire.quote;
+    const amountCents = Math.round(quote.total * 100);
+    const feeCents = Math.round((quote.fee + quote.tax) * 100);
     if (feeCents >= amountCents) {
       return { error: "The project amount is too small to cover the platform fee." };
     }
@@ -176,7 +190,10 @@ export async function fundEscrow(jobId: string) {
         job_id: jobId,
         client_id: hire.user.id,
         freelancer_id: hire.freelancerId,
-        amount_cad: String(hire.amount),
+        amount_cad: String(quote.total),
+        subtotal_cad: String(quote.subtotal),
+        tax_cad: String(quote.tax),
+        tax_label: quote.taxLabel,
       },
     });
     if (!intent.client_secret) return { error: "Stripe did not return a client secret." };
@@ -197,15 +214,25 @@ export async function recordEscrowHold(jobId: string, paymentIntentId: string) {
     if (intent.status !== "requires_capture") {
       return { error: "The bank has not authorized the hold yet." };
     }
+    const quote = hire.quote;
     const { error } = await hire.supabase.from("payments").insert({
       job_id: jobId,
       client_id: hire.user.id,
       freelancer_id: hire.freelancerId,
-      amount_cad: hire.amount,
+      amount_cad: quote.total,
+      subtotal_cad: quote.subtotal,
+      tax_cad: quote.tax,
+      tax_label: quote.taxLabel,
       stripe_payment_intent_id: intent.id,
       status: "held",
     });
     if (error && !/duplicate|unique/i.test(error.message)) return { error: error.message };
+    await notifyUser(hire.supabase, {
+      userId: hire.freelancerId,
+      kind: "payment_held",
+      body: `${quote.total} CAD`,
+      href: `/jobs/${jobId}`,
+    });
     revalidatePath(`/jobs/${jobId}`);
     return { ok: true };
   } catch (err) {
@@ -232,6 +259,12 @@ export async function releaseEscrow(jobId: string) {
       .update({ status: "released", updated_at: new Date().toISOString() })
       .eq("id", payment.id);
     if (updateError) return { error: updateError.message };
+    await notifyUser(hire.supabase, {
+      userId: hire.freelancerId,
+      kind: "payment_released",
+      body: "The client released the held payment.",
+      href: `/jobs/${jobId}`,
+    });
     revalidatePath(`/jobs/${jobId}`);
     return { ok: true };
   } catch (err) {
@@ -258,6 +291,12 @@ export async function refundEscrow(jobId: string) {
       .update({ status: "refunded", updated_at: new Date().toISOString() })
       .eq("id", payment.id);
     if (updateError) return { error: updateError.message };
+    await notifyUser(hire.supabase, {
+      userId: hire.freelancerId,
+      kind: "payment_refunded",
+      body: "The client cancelled the hold.",
+      href: `/jobs/${jobId}`,
+    });
     revalidatePath(`/jobs/${jobId}`);
     return { ok: true };
   } catch (err) {

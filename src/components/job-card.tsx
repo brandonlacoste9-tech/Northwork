@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { MapPin } from "lucide-react";
+import { TrustBadge } from "@/components/trust-badge";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -30,7 +31,8 @@ export function JobCard({ job }: { job: Job }) {
             <Badge variant="secondary">{budgetType === "hourly" ? "Hourly" : "Fixed"}</Badge>
             <CardDescription className="flex flex-wrap items-center gap-1.5">
               <span>{job.client}</span>
-              {job.clientVerified ? <Badge variant="secondary">Verified</Badge> : null}
+              {job.clientSample ? <TrustBadge kind="sample" /> : null}
+              {job.clientVerified ? <TrustBadge kind="verified" /> : null}
             </CardDescription>
           </div>
           <CardTitle className="text-lg">{job.title}</CardTitle>

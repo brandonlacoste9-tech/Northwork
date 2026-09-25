@@ -85,9 +85,31 @@ export default async function FreelancerPage({ params }: PageProps) {
       comment: row.comment,
       createdAt: row.created_at,
     }));
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    let inviteJobs: { id: string; title: string }[] = [];
+    if (user && user.id !== id) {
+      const { data: ownJobs } = await supabase
+        .from("jobs")
+        .select("id, title")
+        .eq("client_id", user.id)
+        .eq("status", "open")
+        .order("created_at", { ascending: false });
+      inviteJobs = (ownJobs ?? []) as { id: string; title: string }[];
+    }
     return (
       <main>
-        <FreelancerProfile person={person} reviews={reviews} />
+        <FreelancerProfile
+          person={person}
+          reviews={reviews}
+          invite={{
+            configured: true,
+            signedIn: Boolean(user),
+            self: user?.id === id,
+            jobs: inviteJobs,
+          }}
+        />
       </main>
     );
   }

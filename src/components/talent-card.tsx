@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { PersonAvatar } from "@/components/person-avatar";
+import { TrustBadge } from "@/components/trust-badge";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -23,6 +24,7 @@ export function TalentCard({ person }: { person: Freelancer }) {
             <div className="min-w-0">
               <CardTitle>{person.name}</CardTitle>
               <CardDescription>{person.role}</CardDescription>
+              {person.sample ? <TrustBadge kind="sample" className="mt-1" /> : null}
             </div>
           </div>
         </CardHeader>
@@ -51,7 +53,9 @@ export function TalentCard({ person }: { person: Freelancer }) {
             <div>
               <p className="font-heading text-lg">{formatHourly(person.hourlyRate)}</p>
               {person.verified ? (
-                <p className="text-xs text-muted-foreground">Verified in Canada</p>
+                <p className="text-xs text-muted-foreground">
+                  <TrustBadge kind="verified" />
+                </p>
               ) : null}
             </div>
             <Badge variant="outline">{person.availability}</Badge>

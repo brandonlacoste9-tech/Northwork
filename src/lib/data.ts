@@ -71,6 +71,7 @@ export type Freelancer = {
   memberSince?: string | null;
   verified?: boolean;
   sample?: boolean;
+  pro?: boolean;
   portfolio?: PortfolioItem[];
 };
 
@@ -755,7 +756,7 @@ export function filterFreelancers(
     if (!needle) return true;
     const haystack = [person.name, ...person.skills].join(" ").toLowerCase();
     return haystack.includes(needle);
-  });
+  }).sort((a, b) => Number(Boolean(b.pro) && !b.sample) - Number(Boolean(a.pro) && !a.sample));
 }
 
 export function filterJobs(

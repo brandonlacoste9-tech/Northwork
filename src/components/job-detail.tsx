@@ -23,12 +23,16 @@ export function JobDetail({
   job: jobProp,
   children,
   showPitchLink = false,
+  pitchesLeft = null,
+  pro = false,
 }: {
   id: string;
   /** Pre-fetched job (Supabase mode). Falls back to the marketplace context. */
   job?: Job;
   children?: React.ReactNode;
   showPitchLink?: boolean;
+  pitchesLeft?: number | null;
+  pro?: boolean;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -90,9 +94,16 @@ export function JobDetail({
           {job.postedLocally ? <Badge className="ml-2">{t("jobs.onDevice")}</Badge> : null}
         </p>
         {showPitchLink ? (
-          <Button asChild className="mt-5 h-12 w-full px-5 sm:w-auto">
-            <a href="#pitch">{t("jobs.sendPitch")}</a>
-          </Button>
+          <div className="mt-5 flex flex-col items-start gap-2">
+            {pro ? (
+              <p className="text-sm font-medium">{t("pitch.proIncluded")}</p>
+            ) : pitchesLeft != null ? (
+              <p className="text-sm font-medium">{t("pitch.left", { count: pitchesLeft })}</p>
+            ) : null}
+            <Button asChild className="h-12 w-full px-5 sm:w-auto">
+              <a href="#pitch">{t("jobs.sendPitch")}</a>
+            </Button>
+          </div>
         ) : null}
       </header>
       {job.skills.length > 0 ? (

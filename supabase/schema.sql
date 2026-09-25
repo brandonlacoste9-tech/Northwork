@@ -856,4 +856,341 @@ update public.profiles
    'Aisha Rahman'
  );
 
+-- -------------------------------- Pro subscriptions and pitch tokens
+-- Safe to re-run in the SQL editor. Billing rows are written by the
+-- session-pooler webhook, not by the signed-in user.
+
+create table if not exists public.subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null unique references auth.users (id) on delete cascade,
+  stripe_customer_id text,
+  stripe_subscription_id text unique,
+  tier text not null default 'free' check (tier in ('free', 'pro')),
+  status text not null default 'inactive'
+    check (status in ('inactive', 'active', 'past_due', 'canceled')),
+  current_period_end timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.token_ledger (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  delta integer not null,
+  reason text not null,
+  created_at timestamptz not null default now(),
+  check (
+    reason in ('launch_grant', 'monthly_grant', 'monthly_reset', 'pitch')
+    or reason like 'topup:%'
+  )
+);
+
+alter table public.subscriptions enable row level security;
+alter table public.token_ledger enable row level security;
+
+drop policy if exists "subscriptions: own read" on public.subscriptions;
+create policy "subscriptions: own read"
+  on public.subscriptions for select
+  to authenticated
+  using (user_id = (select auth.uid()));
+
+drop policy if exists "subscriptions: own insert" on public.subscriptions;
+create policy "subscriptions: own insert"
+  on public.subscriptions for insert
+  to authenticated
+  with check (user_id = (select auth.uid()));
+
+drop policy if exists "subscriptions: own update" on public.subscriptions;
+create policy "subscriptions: own update"
+  on public.subscriptions for update
+  to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
+drop policy if exists "token_ledger: own read" on public.token_ledger;
+create policy "token_ledger: own read"
+  on public.token_ledger for select
+  to authenticated
+  using (user_id = (select auth.uid()));
+
+create index if not exists token_ledger_user_idx
+  on public.token_ledger (user_id, created_at desc);
+
+create unique index if not exists token_ledger_topup_reason_idx
+  on public.token_ledger (user_id, reason)
+  where reason like 'topup:%';
+
+revoke all on table public.subscriptions from anon, authenticated;
+grant select, insert, update on table public.subscriptions to authenticated;
+revoke all on table public.token_ledger from anon, authenticated;
+grant select on table public.token_ledger to authenticated;
+
+-- A signed-in user can touch their subscription row, but cannot grant Pro.
+create or replace function private.block_subscription_self_upgrade()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if coalesce(auth.role(), '') = 'authenticated' then
+    if tg_op = 'INSERT' then
+      new.tier := 'free';
+      new.status := 'inactive';
+      new.stripe_customer_id := null;
+      new.stripe_subscription_id := null;
+      new.current_period_end := null;
+    else
+      new.tier := old.tier;
+      new.status := old.status;
+      new.stripe_customer_id := old.stripe_customer_id;
+      new.stripe_subscription_id := old.stripe_subscription_id;
+      new.current_period_end := old.current_period_end;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists subscriptions_block_self_upgrade on public.subscriptions;
+create trigger subscriptions_block_self_upgrade
+  before insert or update on public.subscriptions
+  for each row
+  execute function private.block_subscription_self_upgrade();
+
+alter table public.jobs add column if not exists featured boolean not null default false;
+
+create or replace function private.keep_job_featured()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if coalesce(auth.role(), '') = 'authenticated' then
+    if tg_op = 'INSERT' then
+      new.featured := false;
+    else
+      new.featured := old.featured;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists jobs_keep_featured on public.jobs;
+create trigger jobs_keep_featured
+  before insert or update on public.jobs
+  for each row
+  execute function private.keep_job_featured();
+
+-- Monthly allowance resets on the 1st, America/Toronto. Top-ups stay.
+-- Pro is 50, Free is 8. Called from the pooler before a balance read or a pitch.
+create or replace function private.ensure_pitch_allowance(target uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  month_start timestamptz := date_trunc(
+    'month', now() at time zone 'America/Toronto'
+  ) at time zone 'America/Toronto';
+  is_pro boolean;
+  allowance integer;
+  last_grant integer;
+  last_at timestamptz;
+  spent_since integer;
+  leftover integer;
+begin
+  if target is null then
+    return;
+  end if;
+  perform pg_advisory_xact_lock(hashtext('pitch:' || target::text));
+
+  select exists (
+    select 1
+    from public.subscriptions s
+    where s.user_id = target
+      and s.tier = 'pro'
+      and s.status = 'active'
+      and (s.current_period_end is null or s.current_period_end > now())
+  ) into is_pro;
+  allowance := case when is_pro then 50 else 8 end;
+
+  if exists (
+    select 1
+    from public.token_ledger t
+    where t.user_id = target
+      and t.reason in ('launch_grant', 'monthly_grant')
+      and t.created_at >= month_start
+  ) then
+    return;
+  end if;
+
+  -- Drop only the unused part of the previous month's allowance.
+  -- Pitches take the allowance first, then top-ups. Top-ups carry over.
+  select t.delta, t.created_at
+    into last_grant, last_at
+  from public.token_ledger t
+  where t.user_id = target
+    and t.reason in ('launch_grant', 'monthly_grant')
+  order by t.created_at desc, t.id desc
+  limit 1;
+
+  if last_grant is not null then
+    select coalesce(sum(t.delta), 0)
+      into spent_since
+    from public.token_ledger t
+    where t.user_id = target
+      and t.reason = 'pitch'
+      and t.created_at >= last_at;
+    leftover := last_grant + spent_since;
+    if leftover > 0 then
+      insert into public.token_ledger (user_id, delta, reason)
+      values (target, -leftover, 'monthly_reset');
+    end if;
+  end if;
+  insert into public.token_ledger (user_id, delta, reason)
+  values (target, allowance, 'monthly_grant');
+end;
+$$;
+
+create or replace function private.pitch_state(target uuid)
+returns table (pro boolean, balance integer)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if target is null then
+    pro := false;
+    balance := 0;
+    return next;
+    return;
+  end if;
+  perform private.ensure_pitch_allowance(target);
+  pro := exists (
+    select 1
+    from public.subscriptions s
+    where s.user_id = target
+      and s.tier = 'pro'
+      and s.status = 'active'
+      and (s.current_period_end is null or s.current_period_end > now())
+  );
+  select coalesce(sum(t.delta), 0)::integer into balance
+  from public.token_ledger t
+  where t.user_id = target;
+  return next;
+end;
+$$;
+
+-- Decrements one pitch when the balance is above zero. Pro does not spend.
+-- Raises pitch_tokens_required at zero so the app can show the upsell.
+create or replace function private.spend_pitch(target uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  state_pro boolean;
+  state_balance integer;
+begin
+  if target is null then
+    raise exception 'pitch_tokens_required';
+  end if;
+  if auth.uid() is not null and auth.uid() <> target
+     and coalesce(auth.role(), '') = 'authenticated' then
+    raise exception 'pitch_tokens_required';
+  end if;
+  perform private.ensure_pitch_allowance(target);
+  select s.pro, s.balance into state_pro, state_balance
+  from private.pitch_state(target) s;
+  if state_pro then
+    return state_balance;
+  end if;
+  if coalesce(state_balance, 0) <= 0 then
+    raise exception 'pitch_tokens_required';
+  end if;
+  insert into public.token_ledger (user_id, delta, reason)
+  values (target, -1, 'pitch');
+  return state_balance - 1;
+end;
+$$;
+
+revoke all on function private.ensure_pitch_allowance(uuid) from public, anon, authenticated;
+revoke all on function private.pitch_state(uuid) from public, anon, authenticated;
+revoke all on function private.spend_pitch(uuid) from public, anon, authenticated;
+
+-- Public ids only. Sample profiles are never Pro, even with a subscription row.
+create or replace function public.active_pro_ids(profile_ids uuid[])
+returns table (profile_id uuid)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select s.user_id
+  from public.subscriptions s
+  join public.profiles p on p.id = s.user_id
+  where s.user_id = any (profile_ids)
+    and s.tier = 'pro'
+    and s.status = 'active'
+    and (s.current_period_end is null or s.current_period_end > now())
+    and coalesce(p.is_sample, false) = false;
+$$;
+
+revoke all on function public.active_pro_ids(uuid[]) from public;
+grant execute on function public.active_pro_ids(uuid[]) to anon, authenticated;
+
+-- Mark a confirmed client's project featured and tell active Pro freelancers.
+create or replace function private.feature_job_and_alert(target_job uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  owner uuid;
+  label text;
+begin
+  select j.client_id, left(j.title, 200)
+    into owner, label
+  from public.jobs j
+  where j.id = target_job;
+  if owner is null then
+    return;
+  end if;
+  if not exists (
+    select 1
+    from public.profiles p
+    where p.id = owner
+      and p.email_confirmed
+      and coalesce(p.is_sample, false) = false
+  ) then
+    return;
+  end if;
+  update public.jobs set featured = true where id = target_job;
+  insert into public.notifications (user_id, kind, body, href)
+  select s.user_id, 'featured_job', coalesce(label, 'Featured project'), '/jobs/' || target_job::text
+  from public.subscriptions s
+  join public.profiles p on p.id = s.user_id
+  where s.tier = 'pro'
+    and s.status = 'active'
+    and (s.current_period_end is null or s.current_period_end > now())
+    and s.user_id <> owner
+    and coalesce(p.is_sample, false) = false;
+end;
+$$;
+
+revoke all on function private.feature_job_and_alert(uuid) from public, anon, authenticated;
+
+insert into public.token_ledger (user_id, delta, reason)
+select p.id, 8, 'launch_grant'
+from public.profiles p
+where not exists (
+  select 1
+  from public.token_ledger t
+  where t.user_id = p.id
+    and t.reason = 'launch_grant'
+);
+
 

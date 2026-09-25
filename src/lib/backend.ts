@@ -73,6 +73,8 @@ export type ProposalRow = {
   freelancer_name?: string | null;
   freelancer_title?: string | null;
   freelancer_rate?: number | string | null;
+  freelancer_pro?: boolean;
+  freelancer_sample?: boolean;
 };
 
 // ---------------------------------------------------------------------------

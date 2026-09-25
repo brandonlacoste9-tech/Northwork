@@ -19,6 +19,7 @@ const kinds = [
   "payment_held",
   "payment_released",
   "payment_refunded",
+  "featured_job",
 ] as const;
 
 export default async function NotificationsPage() {

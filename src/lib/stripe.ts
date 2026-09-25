@@ -3,6 +3,10 @@ import Stripe from "stripe";
 /** Platform take on a released escrow payment. */
 export const PLATFORM_FEE_RATE = 0.05;
 
+/** Existing Stripe prices. Do not create new products. */
+export const PRO_MONTHLY_PRICE_ID = "price_1UJgGsCzqBvMqSYFJ5yCk28P";
+export const PITCH_TOPUP_PRICE_ID = "price_1UJgGuCzqBvMqSYFSfuH8xXj";
+
 let stripe: Stripe | null = null;
 
 /** True when the secret key is present. Charges stay in Stripe test mode. */

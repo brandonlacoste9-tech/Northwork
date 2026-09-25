@@ -74,6 +74,7 @@ export function FreelancerProfile({
             ) : null}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {person.verified ? <TrustBadge kind="verified" /> : null}
+              {person.pro && !person.sample ? <TrustBadge kind="pro" /> : null}
               {person.availability ? (
                 <Badge variant="outline">{availabilityLabel(person.availability, locale)}</Badge>
               ) : null}

@@ -44,7 +44,9 @@ Apply `supabase/schema.sql` in the Supabase SQL editor (or with the pooler). It 
 - `stripe_events` — processed webhook event ids, so a replay does not apply twice. RLS is on and there are no policies, so only the database connection used by the webhook can write it.
 - `portfolio_items` — work samples on a freelancer profile. Public read, owner write.
 - Storage buckets `avatars` and `portfolio` — public read, writes only under `{user-id}/`.
-- `notifications` — in-app alerts for an invite, pitch, hire, decline, message, or payment. A person can read and mark their own. Inserts go through `add_notification`.
+- `notifications` — in-app alerts for an invite, pitch, hire, decline, message, payment, or a featured project. A person can read and mark their own. Inserts go through `add_notification`, except featured-project alerts, which the pooler writes for active Pro freelancers.
+- `subscriptions` — Pro billing for one user. The owner can read the row. Stripe fields are written by the webhook. A signed-in user cannot set their own tier to Pro.
+- `token_ledger` — pitch grants, top-ups, and spends. The owner can read. Writes go through the pooler.
 
 `proposal_counts`, `completed_project_counts`, and `paid_project_counts` are security-definer functions so the board can show counts without opening private rows. `party_email` returns an address only to someone who already shares a thread or a pitch with that person.
 
@@ -60,7 +62,7 @@ Escrow is Stripe Connect in test mode. Nothing is charged until `STRIPE_SECRET_K
 2. On an in-progress project the client funds escrow. Stripe creates a manual-capture PaymentIntent in CAD. The card form authorizes a hold.
 3. Release captures the payment and sends it to the freelancer minus a 5% platform fee. The client authorizes the project amount plus GST, HST, or GST+QST on that fee only (Ontario and the Atlantic provinces use HST, Quebec uses GST+QST, everyone else GST). The place of supply is the project province, or the client's province when the work is remote. It is an estimate, not tax advice.
 4. While the payment is still held, the client can refund it (the uncaptured PaymentIntent is cancelled).
-5. `POST /api/webhooks/stripe` checks the signature and updates `payments` from `payment_intent.amount_capturable_updated`, `payment_intent.succeeded`, `payment_intent.payment_failed`, and `charge.refunded`.
+5. `POST /api/webhooks/stripe` checks the signature, records the event id in `stripe_events`, and ignores a duplicate. Escrow updates come from `payment_intent.amount_capturable_updated`, `payment_intent.succeeded`, `payment_intent.payment_failed`, and `charge.refunded`. The same route also handles `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, and `invoice.payment_failed` for Pro and pitch tokens.
 
 A full test-mode charge was not run here because no Stripe secret key was provided, and `DATABASE_URL` has no database password.
 
@@ -74,7 +76,13 @@ Verified means the email is confirmed and at least one payment has been released
 
 ## French
 
-The header switch stores a `locale` cookie (`en` or `fr`) and translates the navigation, home page, invites, escrow, and alerts. Signup confirmation mail is still the English Supabase template.
+The header switch stores a `locale` cookie (`en` or `fr`) and translates the navigation, home page, invites, escrow, alerts, and pricing. Signup confirmation mail is still the English Supabase template.
+
+## Pro and pitch tokens
+
+Free freelancers get 8 pitches a month, reset on the 1st (America/Toronto). Pro is $19 CAD a month: 50 pitches, a higher place in the talent directory and on pitch lists, a Pro badge, and an alert when a featured project is posted. A featured project is one posted by a confirmed client who is not a sample profile. Sample profiles never show Pro. A one-time top-up is 15 pitches for $12 CAD.
+
+Checkout uses the existing Stripe prices. Nothing in this repo creates a new product. Cancel Pro in the Customer Portal from `/pricing`. The balance sits in the account menu and next to Send a pitch. At zero pitches the form is replaced by the top-up and Pro options. With no Supabase credentials, `/pricing` explains the plans and does not start Checkout.
 
 ## Google sign-in
 

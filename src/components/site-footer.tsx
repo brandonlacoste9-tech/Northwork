@@ -16,6 +16,9 @@ export async function SiteFooter() {
         </p>
         <p>{t("footer.about")}</p>
         <p className="flex gap-4">
+          <Link href="/pricing" className="hover:text-foreground">
+            {t("footer.pricing")}
+          </Link>
           <Link href="/terms" className="hover:text-foreground">
             {t("footer.terms")}
           </Link>

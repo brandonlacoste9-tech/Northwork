@@ -111,10 +111,11 @@ async function annotateTalent(
 ): Promise<Freelancer[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((row) => row.id);
-  const [{ data: reviews }, { data: completed }, { data: paid }, portfolioResult] = await Promise.all([
+  const [{ data: reviews }, { data: completed }, { data: paid }, { data: pros }, portfolioResult] = await Promise.all([
     supabase.from("reviews").select("reviewee_id, rating").in("reviewee_id", ids),
     supabase.rpc("completed_project_counts", { profile_ids: ids }),
     supabase.rpc("paid_project_counts", { profile_ids: ids }),
+    supabase.rpc("active_pro_ids", { profile_ids: ids }),
     withPortfolio
       ? supabase
           .from("portfolio_items")
@@ -137,6 +138,9 @@ async function annotateTalent(
   );
   const paidById = new Map(
     ((paid ?? []) as PaidCountRow[]).map((row) => [row.profile_id, asCount(row.paid_count)]),
+  );
+  const proIds = new Set(
+    ((pros ?? []) as { profile_id: string }[]).map((row) => row.profile_id),
   );
   const portfolioById = new Map<string, PortfolioItem[]>();
   for (const item of (portfolioResult.data ?? []) as PortfolioRow[]) {
@@ -163,6 +167,7 @@ async function annotateTalent(
       memberSince: row.created_at,
       verified: Boolean(row.email_confirmed) && (paidById.get(row.id) ?? 0) > 0 && !sample,
       sample,
+      pro: proIds.has(row.id) && !sample,
       portfolio: portfolioById.get(row.id) ?? [],
     };
   });
@@ -177,7 +182,10 @@ export async function loadTalentDirectory(): Promise<Freelancer[] | undefined> {
     .order("created_at", { ascending: false });
   const people = await annotateTalent(supabase, (data ?? []) as ProfileRow[], false);
   // Example profiles stay visible alongside real ones; the UI badges them as examples.
-  return people;
+  // Pro profiles rank ahead of Free. Sample profiles are never Pro.
+  return people.sort(
+    (a, b) => Number(Boolean(b.pro) && !b.sample) - Number(Boolean(a.pro) && !a.sample),
+  );
 }
 
 export async function loadTalent(id: string): Promise<Freelancer | null> {

@@ -7,13 +7,15 @@ export function TrustBadge({
   kind,
   className,
 }: {
-  kind: "sample" | "verified";
+  kind: "sample" | "verified" | "pro";
   className?: string;
 }) {
   const t = useT();
+  const label =
+    kind === "sample" ? "badge.sample" : kind === "pro" ? "badge.pro" : "badge.verified";
   return (
     <Badge variant={kind === "sample" ? "outline" : "secondary"} className={className}>
-      {t(kind === "sample" ? "badge.sample" : "badge.verified")}
+      {t(label)}
     </Badge>
   );
 }

@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getDb } from "@/lib/db";
+import { featureJob } from "@/lib/pitches";
 import { createClient } from "@/lib/supabase/server";
 import { notifyUser } from "@/lib/notify";
 
@@ -388,23 +390,57 @@ export async function createJob(formData: FormData) {
     .single();
 
   if (error) throw new Error(error.message);
+  try {
+    await featureJob(data.id);
+  } catch {
+    // A featured-job alert must not block the post.
+  }
   revalidatePath("/jobs");
   redirect(`/jobs/${data.id}`);
 }
 
-/** Submit a proposal on a job as the logged-in freelancer. */
+function pitchTokensRequired(err: unknown) {
+  return err instanceof Error && err.message.includes("pitch_tokens_required");
+}
+
+function isUniqueViolation(err: unknown) {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: string }).code === "23505"
+  );
+}
+
+/** Submit a proposal on a job as the logged-in freelancer. One pitch costs one token unless the freelancer is Pro. */
 export async function createProposal(jobId: string, formData: FormData) {
   const { supabase, user } = await requireUser();
   await ensureOwnProfile(supabase, user.id);
+  const cover = String(formData.get("cover_letter") ?? "").trim();
+  if (!cover) throw new Error("Write a cover letter before you send the pitch.");
 
-  const { error } = await supabase.from("proposals").insert({
-    job_id: jobId,
-    freelancer_id: user.id,
-    cover_letter: String(formData.get("cover_letter") ?? "").trim(),
-    bid_cad: parseMoney(formData.get("bid_cad")),
-  });
-
-  if (error) throw new Error(error.message);
+  try {
+    await getDb().begin(async (tx) => {
+      await tx`select private.spend_pitch(${user.id}::uuid)`;
+      await tx`
+        insert into public.proposals (job_id, freelancer_id, cover_letter, bid_cad)
+        values (
+          ${jobId}::uuid,
+          ${user.id}::uuid,
+          ${cover},
+          ${parseMoney(formData.get("bid_cad"))}
+        )
+      `;
+    });
+  } catch (err) {
+    if (pitchTokensRequired(err)) {
+      redirect(`/jobs/${jobId}?tokens=0#pitch`);
+    }
+    if (isUniqueViolation(err)) {
+      throw new Error("You already pitched on this project.");
+    }
+    throw err instanceof Error ? err : new Error("That pitch could not be sent.");
+  }
   const { data: job } = await supabase
     .from("jobs")
     .select("client_id, title")

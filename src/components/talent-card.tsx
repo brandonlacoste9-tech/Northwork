@@ -31,7 +31,10 @@ export function TalentCard({ person }: { person: Freelancer }) {
           <div className="flex items-start gap-3">
             <PersonAvatar name={person.name} src={person.avatarUrl} />
             <div className="min-w-0">
-              <CardTitle className="line-clamp-2">{person.name}</CardTitle>
+              <CardTitle className="line-clamp-2 flex flex-wrap items-center gap-2">
+                {person.name}
+                {person.pro && !person.sample ? <TrustBadge kind="pro" /> : null}
+              </CardTitle>
               {person.role ? (
                 <CardDescription className="line-clamp-2">{person.role}</CardDescription>
               ) : null}

@@ -6,12 +6,14 @@ import { EscrowPanel } from "@/components/escrow-panel";
 import { JobDetail } from "@/components/job-detail";
 import { ReviewForm } from "@/components/review-form";
 import {
+  PitchUpsell,
   ProposalForm,
   ProposalList,
   ProposalPreview,
   ProposalSignIn,
 } from "@/components/proposals";
 import { isSupabaseConfigured, type ProfileRow, type ProposalRow } from "@/lib/backend";
+import { getPitchState } from "@/lib/pitches";
 import { getSeedJob } from "@/lib/data";
 import { loadJob } from "@/lib/listings";
 import { isStripeConfigured, stripePublishableKey } from "@/lib/stripe";
@@ -20,6 +22,7 @@ import { createClient } from "@/lib/supabase/server";
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tokens?: string }>;
 };
 
 export async function generateMetadata({
@@ -47,8 +50,9 @@ export async function generateMetadata({
   };
 }
 
-export default async function JobPage({ params }: PageProps) {
+export default async function JobPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const { tokens } = await searchParams;
 
   // Zero-config preview: sample data via the marketplace provider.
   if (!isSupabaseConfigured()) {
@@ -71,6 +75,7 @@ export default async function JobPage({ params }: PageProps) {
   } = await supabase.auth.getUser();
   const isOwner = Boolean(user && user.id === jobRow.client_id);
   let hired = false;
+  let pitchNote: { pro: boolean; left: number | null } | null = null;
 
   let proposalSlot: ReactNode = null;
   if (isOwner) {
@@ -83,16 +88,23 @@ export default async function JobPage({ params }: PageProps) {
     const freelancerIds = [...new Set(rows.map((p) => p.freelancer_id))];
     const byId: Record<
       string,
-      Pick<ProfileRow, "display_name" | "title" | "hourly_rate_cad">
+      Pick<ProfileRow, "display_name" | "title" | "hourly_rate_cad" | "is_sample">
     > = {};
+    let proIds = new Set<string>();
     if (freelancerIds.length > 0) {
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id, display_name, title, hourly_rate_cad")
+        .select("id, display_name, title, hourly_rate_cad, is_sample")
         .in("id", freelancerIds);
+      const { data: proRows } = await supabase.rpc("active_pro_ids", {
+        profile_ids: freelancerIds,
+      });
+      proIds = new Set(
+        ((proRows ?? []) as { profile_id: string }[]).map((row) => row.profile_id),
+      );
       for (const p of (profiles ?? []) as (Pick<
         ProfileRow,
-        "id" | "display_name" | "title" | "hourly_rate_cad"
+        "id" | "display_name" | "title" | "hourly_rate_cad" | "is_sample"
       >)[]) {
         byId[p.id] = p;
       }
@@ -102,6 +114,9 @@ export default async function JobPage({ params }: PageProps) {
       freelancer_name: byId[r.freelancer_id]?.display_name ?? null,
       freelancer_title: byId[r.freelancer_id]?.title ?? null,
       freelancer_rate: byId[r.freelancer_id]?.hourly_rate_cad ?? null,
+      freelancer_sample: Boolean(byId[r.freelancer_id]?.is_sample),
+      freelancer_pro:
+        proIds.has(r.freelancer_id) && !byId[r.freelancer_id]?.is_sample,
     }));
     proposalSlot = (
       <ProposalList jobId={id} jobStatus={jobRow.status} proposals={enriched} />
@@ -126,6 +141,10 @@ export default async function JobPage({ params }: PageProps) {
         </Link>
       </p>
     ) : null;
+    const pitch = await getPitchState(user.id);
+    pitchNote = pitch
+      ? { pro: pitch.pro, left: pitch.pro ? null : pitch.balance }
+      : null;
     if ((mine as { status: string } | null)?.status === "accepted") {
       hired = true;
       proposalSlot = (
@@ -137,11 +156,31 @@ export default async function JobPage({ params }: PageProps) {
           {threadLink}
         </section>
       );
+    } else if (mine) {
+      proposalSlot = (
+        <section id="pitch" className="mt-10 border-t pt-8">
+          <h2 className="font-heading text-2xl">Pitch sent</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            You already sent a pitch on this project. One pitch per project.
+          </p>
+          {threadLink}
+        </section>
+      );
     } else {
+      const outOfTokens = Boolean(pitch && !pitch.pro && (pitch.balance <= 0 || tokens === "0"));
       proposalSlot = (
         <>
           {threadLink}
-          <ProposalForm jobId={id} proposalCount={job.proposalCount ?? 0} />
+          {outOfTokens ? (
+            <PitchUpsell />
+          ) : (
+            <ProposalForm
+              jobId={id}
+              proposalCount={job.proposalCount ?? 0}
+              pitchesLeft={pitch && !pitch.pro ? pitch.balance : null}
+              pro={Boolean(pitch?.pro)}
+            />
+          )}
         </>
       );
     }
@@ -247,6 +286,8 @@ export default async function JobPage({ params }: PageProps) {
         id={id}
         job={job}
         showPitchLink={!isOwner && !hired}
+        pro={Boolean(pitchNote?.pro)}
+        pitchesLeft={pitchNote?.left ?? null}
       >
         {proposalSlot}
         {escrowSlot}

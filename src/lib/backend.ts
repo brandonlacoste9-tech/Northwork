@@ -121,6 +121,7 @@ export function mapProfileToFreelancer(row: ProfileRow): Freelancer {
     availability: (row.availability as Availability) || "Available this week",
     bio: row.bio?.trim() || "",
     sampleWork: [],
+    avatarUrl: row.avatar_url,
   };
 }
 

@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { AvatarUploader } from "@/components/avatar-uploader";
 import { upsertProfile } from "@/lib/actions";
 import { isSupabaseConfigured, type ProfileRow } from "@/lib/backend";
 import { PROVINCES } from "@/lib/data";
@@ -63,6 +64,20 @@ export default async function ProfilePage() {
         in Canada.
       </p>
       <Card className="mt-8">
+        <CardHeader>
+          <CardTitle className="font-heading text-xl">Photo</CardTitle>
+          <CardDescription>
+            Shown on your talent card and profile. Initials stay until a photo is saved.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AvatarUploader
+            name={profile?.display_name?.trim() || "You"}
+            avatarUrl={profile?.avatar_url ?? null}
+          />
+        </CardContent>
+      </Card>
+      <Card className="mt-6">
         <CardHeader>
           <CardTitle className="font-heading text-xl">Profile details</CardTitle>
           <CardDescription>

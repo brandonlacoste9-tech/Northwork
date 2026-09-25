@@ -425,3 +425,44 @@ export async function setJobStatus(
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath("/jobs");
 }
+
+const AVATAR_TYPES: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+/** Store a profile photo under avatars/{user-id}/ and save the public URL. */
+export async function uploadAvatar(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  await ensureOwnProfile(supabase, user.id);
+
+  const file = formData.get("avatar");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Choose a photo." };
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    return { error: "Photos must be 5 MB or smaller." };
+  }
+  const ext = AVATAR_TYPES[file.type];
+  if (!ext) return { error: "Use a JPG, PNG, or WebP photo." };
+
+  const path = `${user.id}/avatar.${ext}`;
+  const { error: uploadError } = await supabase.storage
+    .from("avatars")
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (uploadError) return { error: uploadError.message };
+
+  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+  const avatarUrl = `${data.publicUrl}?v=${Date.now()}`;
+  const { error } = await supabase
+    .from("profiles")
+    .update({ avatar_url: avatarUrl })
+    .eq("id", user.id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/profile");
+  revalidatePath("/talent");
+  revalidatePath(`/talent/${user.id}`);
+  return { url: avatarUrl };
+}

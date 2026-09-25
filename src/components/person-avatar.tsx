@@ -11,11 +11,28 @@ const tones = [
 
 export function PersonAvatar({
   name,
+  src,
   className,
 }: {
   name: string;
+  src?: string | null;
   className?: string;
 }) {
+  if (src) {
+    return (
+      <span
+        className={cn(
+          "grid size-11 shrink-0 overflow-hidden rounded-full bg-muted",
+          className,
+        )}
+      >
+        {/* blob: previews from the file input are not valid for next/image. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt="" className="size-full object-cover" />
+      </span>
+    );
+  }
+
   const tone =
     tones[
       name.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0) %

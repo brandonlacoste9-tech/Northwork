@@ -65,6 +65,7 @@ export type Freelancer = {
   availability: Availability;
   bio: string;
   sampleWork: { title: string; summary: string }[];
+  avatarUrl?: string | null;
 };
 
 export type Job = {

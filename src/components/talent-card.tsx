@@ -18,7 +18,7 @@ export function TalentCard({ person }: { person: Freelancer }) {
       <Card className="h-full transition-shadow hover:ring-primary/30">
         <CardHeader>
           <div className="flex items-start gap-3">
-            <PersonAvatar name={person.name} />
+            <PersonAvatar name={person.name} src={person.avatarUrl} />
             <div className="min-w-0">
               <CardTitle>{person.name}</CardTitle>
               <CardDescription>{person.role}</CardDescription>

@@ -375,3 +375,55 @@ create index if not exists reviews_reviewee_idx on public.reviews (reviewee_id);
 
 grant select on table public.reviews to anon, authenticated;
 grant insert on table public.reviews to authenticated;
+
+-- --------------------------------------------------------------- avatars
+-- Public read. Writes only under avatars/{user-id}/* (object name is {user-id}/file).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'avatars',
+  'avatars',
+  true,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do update
+  set public = excluded.public,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "avatars: public read" on storage.objects;
+create policy "avatars: public read"
+  on storage.objects for select
+  to anon, authenticated
+  using (bucket_id = 'avatars');
+
+drop policy if exists "avatars: insert own folder" on storage.objects;
+create policy "avatars: insert own folder"
+  on storage.objects for insert
+  to authenticated
+  with check (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists "avatars: update own folder" on storage.objects;
+create policy "avatars: update own folder"
+  on storage.objects for update
+  to authenticated
+  using (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  )
+  with check (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+drop policy if exists "avatars: delete own folder" on storage.objects;
+create policy "avatars: delete own folder"
+  on storage.objects for delete
+  to authenticated
+  using (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+  );

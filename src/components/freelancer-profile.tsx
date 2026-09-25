@@ -39,7 +39,11 @@ export function FreelancerProfile({
       </Link>
       <header className="mt-6 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex gap-4">
-          <PersonAvatar name={person.name} className="size-16 text-lg" />
+          <PersonAvatar
+            name={person.name}
+            src={person.avatarUrl}
+            className="size-16 text-lg"
+          />
           <div>
             <h1 className="font-heading text-3xl tracking-tight sm:text-4xl">
               {person.name}

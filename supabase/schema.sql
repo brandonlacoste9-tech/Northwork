@@ -1516,4 +1516,263 @@ revoke all on function private.dispatch_instant_alerts(uuid) from public, anon, 
 revoke all on function private.dispatch_daily_digests() from public, anon, authenticated;
 revoke all on function private.unsubscribe_alerts(uuid) from public, anon, authenticated;
 
+-- The app calls these public functions. They match "Montreal, QC" to Quebec
+-- and do not need the database password. Instant alerts can be recorded by
+-- the client who posted the project. Only the service role receives email rows.
+
+create or replace function public.location_province(location text)
+returns text
+language plpgsql
+immutable
+set search_path = ''
+as $$
+declare
+  token text;
+  folded text;
+begin
+  if location is null or btrim(location) = '' then
+    return null;
+  end if;
+  if location ~* 'remote' or location ~* 'distance' then
+    return null;
+  end if;
+  token := btrim(split_part(location, ',', array_length(string_to_array(location, ','), 1)));
+  folded := translate(lower(token), 'éèêëàâäîïôöùûüç', 'eeeeaaaiioouuuc');
+  return case folded
+    when 'ab' then 'Alberta'
+    when 'alberta' then 'Alberta'
+    when 'bc' then 'British Columbia'
+    when 'british columbia' then 'British Columbia'
+    when 'colombie-britannique' then 'British Columbia'
+    when 'mb' then 'Manitoba'
+    when 'manitoba' then 'Manitoba'
+    when 'nb' then 'New Brunswick'
+    when 'new brunswick' then 'New Brunswick'
+    when 'nouveau-brunswick' then 'New Brunswick'
+    when 'nl' then 'Newfoundland and Labrador'
+    when 'newfoundland and labrador' then 'Newfoundland and Labrador'
+    when 'terre-neuve-et-labrador' then 'Newfoundland and Labrador'
+    when 'nt' then 'Northwest Territories'
+    when 'northwest territories' then 'Northwest Territories'
+    when 'territoires du nord-ouest' then 'Northwest Territories'
+    when 'ns' then 'Nova Scotia'
+    when 'nova scotia' then 'Nova Scotia'
+    when 'nouvelle-ecosse' then 'Nova Scotia'
+    when 'nu' then 'Nunavut'
+    when 'nunavut' then 'Nunavut'
+    when 'on' then 'Ontario'
+    when 'ontario' then 'Ontario'
+    when 'pe' then 'Prince Edward Island'
+    when 'pei' then 'Prince Edward Island'
+    when 'prince edward island' then 'Prince Edward Island'
+    when 'ile-du-prince-edouard' then 'Prince Edward Island'
+    when 'qc' then 'Quebec'
+    when 'quebec' then 'Quebec'
+    when 'sk' then 'Saskatchewan'
+    when 'saskatchewan' then 'Saskatchewan'
+    when 'yt' then 'Yukon'
+    when 'yukon' then 'Yukon'
+    else null
+  end;
+end;
+$$;
+
+create or replace function public.saved_search_matches(
+  search_skills text[],
+  min_budget numeric,
+  search_type text,
+  search_province text,
+  search_remote boolean,
+  job_skills text[],
+  job_budget numeric,
+  job_budget_max numeric,
+  job_type text,
+  job_location text
+)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(
+    (coalesce(array_length(search_skills, 1), 0) = 0 or search_skills && coalesce(job_skills, '{}'))
+    and (min_budget is null or coalesce(job_budget_max, job_budget, 0) >= min_budget)
+    and (search_type is null or search_type = job_type)
+    and (
+      case
+        when coalesce(search_remote, false) then
+          coalesce(job_location, '') ~* 'remote' or coalesce(job_location, '') ~* 'distance'
+        when search_province is not null then
+          public.location_province(job_location) = search_province
+        else true
+      end
+    ),
+    false
+  );
+$$;
+
+-- Records instant matches for one open project. The job's client or the
+-- service role may call it. Only the service role receives recipient rows,
+-- so a client cannot list who saved a search.
+create or replace function public.dispatch_saved_search_alerts(target_job uuid)
+returns table (recipient uuid, search_id uuid, token uuid, search_name text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  found public.jobs%rowtype;
+  hits uuid[];
+begin
+  select * into found
+  from public.jobs j
+  where j.id = target_job
+    and j.status = 'open';
+  if found.id is null then
+    return;
+  end if;
+  if coalesce(auth.role(), '') <> 'service_role'
+     and (auth.uid() is null or auth.uid() <> found.client_id) then
+    return;
+  end if;
+
+  with ins as (
+    insert into public.job_alerts_sent (saved_search_id, job_id)
+    select s.id, found.id
+    from public.saved_searches s
+    join public.profiles p on p.id = s.user_id
+    where s.alert_frequency = 'instant'
+      and s.user_id <> found.client_id
+      and coalesce(p.is_sample, false) = false
+      and public.saved_search_matches(
+        s.skills, s.min_budget_cad, s.budget_type, s.province, s.remote_only,
+        found.skills, found.budget_cad, found.budget_max_cad, found.budget_type, found.location
+      )
+    on conflict (saved_search_id, job_id) do nothing
+    returning saved_search_id
+  )
+  select coalesce(array_agg(ins.saved_search_id), '{}') into hits from ins;
+
+  insert into public.notifications (user_id, kind, body, href)
+  select distinct s.user_id, 'job_alert', left(coalesce(found.title, 'Project'), 200), '/jobs/' || found.id::text
+  from public.saved_searches s
+  where s.id = any (hits);
+
+  if coalesce(auth.role(), '') = 'service_role' then
+    return query
+    select s.user_id, s.id, s.unsubscribe_token, s.name
+    from public.saved_searches s
+    where s.id = any (hits);
+  end if;
+end;
+$$;
+
+-- One row per new daily match from the last 24 hours. Service role only.
+create or replace function public.dispatch_daily_job_alerts()
+returns table (
+  recipient uuid,
+  token uuid,
+  search_name text,
+  job_id uuid,
+  job_title text,
+  job_budget numeric,
+  job_budget_type text,
+  job_location text
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if coalesce(auth.role(), '') <> 'service_role' then
+    return;
+  end if;
+
+  return query
+  with ins as (
+    insert into public.job_alerts_sent (saved_search_id, job_id)
+    select s.id, j.id
+    from public.saved_searches s
+    join public.profiles p on p.id = s.user_id
+    join public.jobs j
+      on j.status = 'open'
+     and j.created_at >= now() - interval '24 hours'
+    where s.alert_frequency = 'daily'
+      and s.user_id <> j.client_id
+      and coalesce(p.is_sample, false) = false
+      and public.saved_search_matches(
+        s.skills, s.min_budget_cad, s.budget_type, s.province, s.remote_only,
+        j.skills, j.budget_cad, j.budget_max_cad, j.budget_type, j.location
+      )
+    on conflict (saved_search_id, job_id) do nothing
+    returning saved_search_id, job_id
+  ),
+  noted as (
+    insert into public.notifications (user_id, kind, body, href)
+    select s.user_id,
+      'job_digest',
+      left(count(distinct ins.job_id)::text, 20),
+      '/jobs'
+    from ins
+    join public.saved_searches s on s.id = ins.saved_search_id
+    group by s.user_id
+    returning user_id
+  )
+  select s.user_id,
+    s.unsubscribe_token,
+    s.name,
+    j.id,
+    j.title,
+    j.budget_cad,
+    j.budget_type,
+    j.location
+  from ins
+  join public.saved_searches s on s.id = ins.saved_search_id
+  join public.jobs j on j.id = ins.job_id
+  where (select count(*) from noted) >= 0;
+end;
+$$;
+
+create or replace function public.unsubscribe_job_alert(token uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  updated integer;
+begin
+  if token is null then
+    return false;
+  end if;
+  update public.saved_searches
+     set alert_frequency = 'off'
+   where unsubscribe_token = token
+     and alert_frequency <> 'off';
+  get diagnostics updated = row_count;
+  if updated > 0 then
+    return true;
+  end if;
+  return exists (
+    select 1 from public.saved_searches s where s.unsubscribe_token = token
+  );
+end;
+$$;
+
+revoke all on function public.location_province(text) from public;
+grant execute on function public.location_province(text) to anon, authenticated, service_role;
+
+revoke all on function public.saved_search_matches(text[], numeric, text, text, boolean, text[], numeric, numeric, text, text) from public;
+grant execute on function public.saved_search_matches(text[], numeric, text, text, boolean, text[], numeric, numeric, text, text) to anon, authenticated, service_role;
+
+revoke all on function public.dispatch_saved_search_alerts(uuid) from public;
+grant execute on function public.dispatch_saved_search_alerts(uuid) to authenticated, service_role;
+
+revoke all on function public.dispatch_daily_job_alerts() from public, anon, authenticated;
+grant execute on function public.dispatch_daily_job_alerts() to service_role;
+
+revoke all on function public.unsubscribe_job_alert(uuid) from public;
+grant execute on function public.unsubscribe_job_alert(uuid) to anon, authenticated, service_role;
+
+
 

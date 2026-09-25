@@ -86,7 +86,7 @@ Checkout uses the existing Stripe prices. Nothing in this repo creates a new pro
 
 ## Saved job alerts
 
-On the job filters, a signed-in freelancer can name the current search and save it. A matching open project creates one in-site alert per search. Instant alerts go out when the project is posted. Daily alerts are one note per person for the last 24 hours, from `POST /api/job-alerts/digest`. The same project is not alerted twice for the same search. Each email includes an unsubscribe link, which turns that person's alerts off, and a link to `/settings/alerts`. If `RESEND_API_KEY` or `NOTIFICATION_FROM` is blank, the in-site alert still appears. The sample preview does not save searches.
+On the job filters, a signed-in freelancer can name the current search and save it. A matching open project creates one in-site alert per search, including when the location is a city plus a province code. Instant alerts go out when the project is posted, using the poster's session, so they do not need the database password. Daily alerts are one note per person for the last 24 hours, from `GET` or `POST /api/job-alerts/digest` with `Authorization: Bearer CRON_SECRET`. That route also needs `SUPABASE_SERVICE_ROLE_KEY`. The same project is not alerted twice for the same search. Each email includes a one-click unsubscribe for that search and a link to `/settings/alerts`. If `RESEND_API_KEY` or `NOTIFICATION_FROM` is blank, the in-site alert still appears. The sample preview does not save searches.
 
 ## Google sign-in
 

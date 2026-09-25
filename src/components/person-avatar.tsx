@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { cn } from "cn";
 import { initials } from "@/lib/data";
 
@@ -18,7 +21,14 @@ export function PersonAvatar({
   src?: string | null;
   className?: string;
 }) {
-  if (src) {
+  const [failed, setFailed] = useState(false);
+  const tone =
+    tones[
+      name.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0) %
+        tones.length
+    ];
+
+  if (src && !failed) {
     return (
       <span
         className={cn(
@@ -28,16 +38,15 @@ export function PersonAvatar({
       >
         {/* blob: previews from the file input are not valid for next/image. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt="" className="size-full object-cover" />
+        <img
+          src={src}
+          alt=""
+          className="size-full object-cover"
+          onError={() => setFailed(true)}
+        />
       </span>
     );
   }
-
-  const tone =
-    tones[
-      name.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0) %
-        tones.length
-    ];
 
   return (
     <span

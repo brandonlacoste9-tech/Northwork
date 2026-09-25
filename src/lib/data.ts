@@ -756,7 +756,18 @@ export function filterFreelancers(
     if (!needle) return true;
     const haystack = [person.name, ...person.skills].join(" ").toLowerCase();
     return haystack.includes(needle);
-  }).sort((a, b) => Number(Boolean(b.pro) && !b.sample) - Number(Boolean(a.pro) && !a.sample));
+  }).sort((a, b) => {
+    const pro =
+      Number(Boolean(b.pro) && !b.sample) - Number(Boolean(a.pro) && !a.sample);
+    if (pro) return pro;
+    const ready =
+      Number(b.hourlyRate > 0 && Boolean(b.avatarUrl)) -
+      Number(a.hourlyRate > 0 && Boolean(a.avatarUrl));
+    if (ready) return ready;
+    const rated = Number(b.hourlyRate > 0) - Number(a.hourlyRate > 0);
+    if (rated) return rated;
+    return a.name.localeCompare(b.name);
+  });
 }
 
 export function filterJobs(

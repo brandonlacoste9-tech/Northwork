@@ -16,77 +16,70 @@ import {
 import type { Freelancer } from "@/lib/data";
 import { availabilityLabel, formatHourly } from "@/lib/format";
 import { formatPersonPlace } from "@/lib/place";
-import { StarRow } from "@/components/review-form";
 
 export function TalentCard({ person }: { person: Freelancer }) {
   const t = useT();
   const locale = useLocale();
   const place = formatPersonPlace(person.city, person.province, locale);
-  const shownSkills = person.skills.slice(0, 4);
-  const extraSkills = person.skills.length - shownSkills.length;
+  const shownSkills = person.skills.slice(0, 2);
   return (
     <Link href={`/talent/${person.id}`} className="block h-full rounded-xl">
       <Card className="h-full transition-shadow hover:ring-primary/30">
         <CardHeader>
-          <div className="flex items-start gap-3">
-            <PersonAvatar name={person.name} src={person.avatarUrl} />
-            <div className="min-w-0">
-              <CardTitle className="line-clamp-2 flex flex-wrap items-center gap-2">
-                {person.name}
+          <div className="flex items-center gap-3">
+            <PersonAvatar name={person.name} src={person.avatarUrl} className="size-12" />
+            <div className="min-w-0 flex-1">
+              <CardTitle className="flex min-w-0 items-center gap-2 text-base">
+                <span className="min-w-0 truncate">{person.name}</span>
                 {person.pro && !person.sample ? <TrustBadge kind="pro" /> : null}
               </CardTitle>
-              {person.role ? (
-                <CardDescription className="line-clamp-2">{person.role}</CardDescription>
-              ) : null}
+              <CardDescription className="truncate">
+                {person.role || "\u00a0"}
+              </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="flex flex-1 flex-col gap-3">
-          {place ? (
-            <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">{place}</span>
-            </p>
-          ) : null}
-          {person.reviewCount ? (
-            <p className="flex flex-wrap items-center gap-2 text-sm">
-              <StarRow rating={person.rating ?? 0} />
-              <span className="text-muted-foreground">
-                {(person.rating ?? 0).toFixed(1)} ·{" "}
-                {person.reviewCount === 1
-                  ? t("profile.reviewOne", { count: person.reviewCount })
-                  : t("profile.reviewsMany", { count: person.reviewCount })}
-              </span>
-            </p>
-          ) : null}
-          {shownSkills.length > 0 ? (
-            <ul className="flex flex-wrap gap-1.5">
-              {shownSkills.map((skill) => (
-                <li key={skill}>
-                  <Badge variant="outline">{skill}</Badge>
-                </li>
-              ))}
-              {extraSkills > 0 ? (
-                <li>
-                  <Badge variant="outline">+{extraSkills}</Badge>
-                </li>
-              ) : null}
-            </ul>
-          ) : null}
-          <div className="mt-auto flex items-end justify-between gap-3 pt-2">
-            {person.hourlyRate > 0 ? (
-              <p className="font-heading text-lg tabular-nums">
-                {formatHourly(person.hourlyRate, locale)}
-              </p>
+          <p className="flex h-5 items-center gap-1.5 text-sm text-muted-foreground">
+            {place ? (
+              <>
+                <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{place}</span>
+              </>
             ) : (
-              <span />
+              "\u00a0"
             )}
-            <div className="flex flex-wrap items-center justify-end gap-1.5">
+          </p>
+          <ul className="flex h-6 gap-1.5 overflow-hidden">
+            {shownSkills.map((skill) => (
+              <li key={skill} className="min-w-0 max-w-[50%]">
+                <Badge variant="outline" className="max-w-full truncate">
+                  {skill}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-auto flex h-8 items-center justify-between gap-2">
+            <p className="shrink-0 font-heading text-lg tabular-nums">
+              {person.hourlyRate > 0 ? formatHourly(person.hourlyRate, locale) : "\u00a0"}
+            </p>
+            <div className="flex min-w-0 items-center justify-end gap-1.5">
               {person.verified ? <TrustBadge kind="verified" /> : null}
               {person.availability ? (
-                <Badge variant="outline" className="max-w-40 truncate">
+                <Badge variant="outline" className="max-w-28 truncate">
                   {availabilityLabel(person.availability, locale)}
                 </Badge>
+              ) : null}
+              {person.reviewCount ? (
+                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                  {(person.rating ?? 0).toFixed(1)}
+                  <span className="sr-only">
+                    {" "}
+                    {person.reviewCount === 1
+                      ? t("profile.reviewOne", { count: person.reviewCount })
+                      : t("profile.reviewsMany", { count: person.reviewCount })}
+                  </span>
+                </span>
               ) : null}
             </div>
           </div>

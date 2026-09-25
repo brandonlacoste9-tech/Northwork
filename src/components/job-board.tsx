@@ -63,8 +63,21 @@ function SaveSearch({
   canSave: boolean;
 }) {
   const t = useT();
+  const [open, setOpen] = useState(false);
   if (!canSave) {
     return <p className="border-t pt-4 text-sm text-muted-foreground">{t("alerts.preview")}</p>;
+  }
+  if (!open) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        className="h-10 justify-start px-0"
+        onClick={() => setOpen(true)}
+      >
+        {t("alerts.save")}
+      </Button>
+    );
   }
   return (
     <form action={saveJobSearch} className="grid gap-2 border-t pt-4">
@@ -102,6 +115,7 @@ export function JobBoard({
   const { jobs: contextJobs } = useMarketplace();
   const jobs = jobsProp ?? contextJobs;
   const [filters, setFilters] = useState<Filters>(initialFilters);
+  const [skillsOpen, setSkillsOpen] = useState(false);
 
   const results = useMemo(() => filterJobs(jobs, filters), [jobs, filters]);
   const skillOptions = useMemo(() => {
@@ -117,6 +131,12 @@ export function JobBoard({
     const selected = filters.skills.filter((skill) => !ranked.slice(0, 16).includes(skill));
     return [...selected, ...ranked.slice(0, 16)];
   }, [jobs, filters.skills]);
+  const visibleSkills = skillsOpen
+    ? skillOptions
+    : [
+        ...filters.skills.filter((skill) => skillOptions.includes(skill)),
+        ...skillOptions.filter((skill) => !filters.skills.includes(skill)),
+      ].slice(0, Math.max(6, filters.skills.length));
 
   const activeCount = [
     filters.province !== "all",
@@ -224,7 +244,7 @@ export function JobBoard({
         <fieldset className="grid gap-2">
           <legend className="text-sm font-medium">{t("jobs.skills")}</legend>
           <div className="flex flex-wrap gap-1.5">
-            {skillOptions.map((skill) => {
+            {visibleSkills.map((skill) => {
               const selected = filters.skills.includes(skill);
               return (
                 <button
@@ -244,6 +264,16 @@ export function JobBoard({
               );
             })}
           </div>
+          {skillOptions.length > 6 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-8 justify-start px-0 text-sm"
+              onClick={() => setSkillsOpen((open) => !open)}
+            >
+              {skillsOpen ? t("jobs.fewerSkills") : t("jobs.moreSkills")}
+            </Button>
+          ) : null}
         </fieldset>
       ) : null}
       {activeCount > 0 ? (

@@ -1,58 +1,66 @@
+"use client";
+
 import Link from "next/link";
-import { MapPin } from "lucide-react";
 import { TrustBadge } from "@/components/trust-badge";
+import { useLocale, useT } from "@/components/locale-provider";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import type { Job } from "@/lib/data";
-import { formatBudget, postedAgo } from "@/lib/format";
-
-function pitchLabel(count: number) {
-  if (count === 1) return "1 pitch";
-  return `${count} pitches`;
-}
+import { formatJobBudget, postedAgo } from "@/lib/format";
+import { formatJobLocation } from "@/lib/place";
 
 export function JobCard({ job }: { job: Job }) {
+  const t = useT();
+  const locale = useLocale();
   const budgetType = job.budgetType ?? "fixed";
+  const pitches = job.proposalCount ?? 0;
   return (
-    <Link href={`/jobs/${job.id}`} className="block rounded-xl">
-      <Card className="transition-shadow hover:ring-primary/30">
-        <CardHeader>
-          <div className="flex flex-wrap items-center gap-2">
-            {job.postedLocally ? <Badge>Just posted</Badge> : null}
-            <Badge variant="outline">
-              {job.location === "Remote in Canada" ? "Remote in Canada" : job.location}
+    <Link href={`/jobs/${job.id}`} className="block h-full rounded-xl">
+      <Card className="h-full transition-shadow hover:ring-primary/30">
+        <CardHeader className="gap-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {job.postedLocally ? <Badge>{t("jobs.justPosted")}</Badge> : null}
+            <Badge variant="outline">{formatJobLocation(job.location, locale)}</Badge>
+            <Badge variant="secondary">
+              {budgetType === "hourly" ? t("jobs.typeHourly") : t("jobs.typeFixed")}
             </Badge>
-            <Badge variant="secondary">{budgetType === "hourly" ? "Hourly" : "Fixed"}</Badge>
-            <CardDescription className="flex flex-wrap items-center gap-1.5">
-              <span>{job.client}</span>
-              {job.clientVerified ? <TrustBadge kind="verified" /> : null}
-            </CardDescription>
+            {job.clientVerified ? <TrustBadge kind="verified" /> : null}
           </div>
-          <CardTitle className="text-lg">{job.title}</CardTitle>
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+            <CardTitle className="text-lg leading-snug">{job.title}</CardTitle>
+            <p className="shrink-0 font-heading text-xl tabular-nums">
+              {formatJobBudget(job.budgetMin, job.budgetMax, budgetType, locale)}
+            </p>
+          </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <p className="font-heading text-xl">
-            {formatBudget(job.budgetMin, job.budgetMax)}
+          <p className="text-sm text-muted-foreground">
+            <span className="text-foreground">{job.client}</span>
+            <span aria-hidden="true"> · </span>
+            <span>{postedAgo(job.postedAt, locale)}</span>
+            {pitches > 0 ? (
+              <>
+                <span aria-hidden="true"> · </span>
+                <span>
+                  {pitches === 1 ? t("jobs.pitchOne") : t("jobs.pitches", { count: pitches })}
+                </span>
+              </>
+            ) : null}
           </p>
-          <p className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-            <MapPin className="size-3.5" aria-hidden="true" />
-            <span>{postedAgo(job.postedAt)}</span>
-            <span aria-hidden="true">·</span>
-            <span>{pitchLabel(job.proposalCount ?? 0)}</span>
-          </p>
-          <ul className="flex flex-wrap gap-1.5">
-            {job.skills.map((skill) => (
-              <li key={skill}>
-                <Badge variant="secondary">{skill}</Badge>
-              </li>
-            ))}
-          </ul>
+          {job.skills.length > 0 ? (
+            <ul className="flex flex-wrap gap-1.5">
+              {job.skills.map((skill) => (
+                <li key={skill}>
+                  <Badge variant="secondary">{skill}</Badge>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </CardContent>
       </Card>
     </Link>

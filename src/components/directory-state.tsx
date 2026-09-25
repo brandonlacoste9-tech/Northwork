@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useT } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -30,6 +33,7 @@ export function DirectoryError({
   body: string;
   onRetry: () => void;
 }) {
+  const t = useT();
   return (
     <Card role="alert">
       <CardHeader>
@@ -38,7 +42,7 @@ export function DirectoryError({
       </CardHeader>
       <CardContent>
         <Button type="button" onClick={onRetry} className="h-10 px-4">
-          Retry
+          {t("directory.retry")}
         </Button>
       </CardContent>
     </Card>
@@ -56,6 +60,7 @@ export function DirectoryEmpty({
   onClear?: () => void;
   action?: { href: string; label: string };
 }) {
+  const t = useT();
   return (
     <Card>
       <CardHeader>
@@ -70,7 +75,7 @@ export function DirectoryEmpty({
             onClick={onClear}
             className="h-10 px-4"
           >
-            Clear filters
+            {t("directory.clear")}
           </Button>
         ) : null}
         {action ? (

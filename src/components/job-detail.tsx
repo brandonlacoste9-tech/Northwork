@@ -1,10 +1,9 @@
 "use client";
 
-"use client";
-
 import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { TrustBadge } from "@/components/trust-badge";
+import { useLocale, useT } from "@/components/locale-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,8 +13,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatBudget, memberSinceLabel, postedAgo } from "@/lib/format";
+import { formatJobBudget, memberSinceLabel, postedAgo } from "@/lib/format";
 import { useMarketplace } from "@/lib/marketplace";
+import { formatJobLocation } from "@/lib/place";
 import type { Job } from "@/lib/data";
 
 export function JobDetail({
@@ -30,67 +30,80 @@ export function JobDetail({
   children?: React.ReactNode;
   showPitchLink?: boolean;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const { jobs } = useMarketplace();
   const job = jobProp ?? jobs.find((item) => item.id === id);
 
   if (!job) {
     return (
       <div className="mx-auto max-w-xl px-4 py-16">
-        <h1 className="font-heading text-3xl">This project is not listed</h1>
-        <p className="mt-3 text-muted-foreground">
-          It may have been cleared from this browser, or the link is wrong.
-          Northernwork only keeps projects you post on this device.
-        </p>
-        <Button asChild className="mt-6 h-10 px-4">
-          <Link href="/jobs">Back to jobs</Link>
+        <h1 className="font-heading text-3xl">{t("jobs.missingTitle")}</h1>
+        <p className="mt-3 text-muted-foreground">{t("jobs.missingBody")}</p>
+        <Button asChild className="mt-6 h-11 w-full px-4 sm:w-auto">
+          <Link href="/jobs">{t("jobs.back")}</Link>
         </Button>
       </div>
     );
   }
 
-  const since = memberSinceLabel(job.clientMemberSince);
+  const since = memberSinceLabel(job.clientMemberSince, locale);
   const pitches = job.proposalCount ?? 0;
   const budgetType = job.budgetType ?? "fixed";
 
   return (
-    <article className="mx-auto max-w-3xl px-4 py-10">
+    <article className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
       <Link href="/jobs" className="text-sm font-medium text-primary hover:underline">
-        Back to jobs
+        {t("jobs.back")}
       </Link>
       <header className="mt-6">
         <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <span>{job.client}</span>
+          <span className="text-foreground">{job.client}</span>
           {job.clientVerified ? <TrustBadge kind="verified" /> : null}
         </p>
-        <h1 className="mt-2 font-heading text-3xl tracking-tight sm:text-4xl">{job.title}</h1>
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-y py-4">
-          <p className="font-heading text-2xl">{formatBudget(job.budgetMin, job.budgetMax)}</p>
-          <Badge variant="secondary">{budgetType === "hourly" ? "Hourly" : "Fixed"}</Badge>
-          {job.duration ? <Badge variant="outline">{job.duration}</Badge> : null}
-          <Badge variant="outline">
-            <MapPin className="size-3" aria-hidden="true" />
-            {job.location}
-          </Badge>
+        <h1 className="mt-2 font-heading text-3xl tracking-tight text-balance sm:text-4xl">
+          {job.title}
+        </h1>
+        <div className="mt-4 flex flex-col gap-3 border-y py-4 sm:flex-row sm:flex-wrap sm:items-center">
+          <p className="font-heading text-3xl tabular-nums">
+            {formatJobBudget(job.budgetMin, job.budgetMax, budgetType, locale)}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">
+              {budgetType === "hourly" ? t("jobs.typeHourly") : t("jobs.typeFixed")}
+            </Badge>
+            {job.duration ? <Badge variant="outline">{job.duration}</Badge> : null}
+            <Badge variant="outline">
+              <MapPin className="size-3" aria-hidden="true" />
+              {formatJobLocation(job.location, locale)}
+            </Badge>
+          </div>
         </div>
         <p className="mt-3 text-sm text-muted-foreground">
-          Posted {postedAgo(job.postedAt)}
-          <span aria-hidden="true"> · </span>
-          {pitches === 1 ? "1 pitch" : `${pitches} pitches`}
-          {job.postedLocally ? <Badge className="ml-2">On this device</Badge> : null}
+          {t("jobs.posted", { when: postedAgo(job.postedAt, locale) })}
+          {pitches > 0 ? (
+            <>
+              <span aria-hidden="true"> · </span>
+              {pitches === 1 ? t("jobs.pitchOne") : t("jobs.pitches", { count: pitches })}
+            </>
+          ) : null}
+          {job.postedLocally ? <Badge className="ml-2">{t("jobs.onDevice")}</Badge> : null}
         </p>
         {showPitchLink ? (
-          <Button asChild className="mt-5 h-11 px-5">
-            <a href="#pitch">Send a pitch</a>
+          <Button asChild className="mt-5 h-12 w-full px-5 sm:w-auto">
+            <a href="#pitch">{t("jobs.sendPitch")}</a>
           </Button>
         ) : null}
       </header>
-      <ul className="mt-6 flex flex-wrap gap-2">
-        {job.skills.map((skill) => (
-          <li key={skill}>
-            <Badge variant="secondary">{skill}</Badge>
-          </li>
-        ))}
-      </ul>
+      {job.skills.length > 0 ? (
+        <ul className="mt-6 flex flex-wrap gap-2">
+          {job.skills.map((skill) => (
+            <li key={skill}>
+              <Badge variant="secondary">{skill}</Badge>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="mt-8 space-y-4 text-base leading-7">
         {job.description.map((paragraph) => (
           <p key={paragraph}>{paragraph}</p>
@@ -99,7 +112,7 @@ export function JobDetail({
       <Card className="mt-8">
         <CardHeader>
           <CardTitle className="flex flex-wrap items-center gap-2 text-lg">
-            About the client
+            {t("jobs.aboutClient")}
             {job.clientVerified ? <TrustBadge kind="verified" /> : null}
           </CardTitle>
           <CardDescription>{job.client}</CardDescription>
@@ -107,11 +120,11 @@ export function JobDetail({
         <CardContent className="grid gap-1 text-sm text-muted-foreground">
           {since ? <p>{since}</p> : null}
           <p>
-            {job.clientOpenJobs === 1
-              ? "1 open project"
-              : `${job.clientOpenJobs ?? 0} open projects`}
+            {(job.clientOpenJobs ?? 0) === 1
+              ? t("jobs.clientOpenOne")
+              : t("jobs.clientOpen", { count: job.clientOpenJobs ?? 0 })}
           </p>
-          <p>Work stays inside Canada. Budgets are in CAD.</p>
+          <p>{t("jobs.canadaNote")}</p>
         </CardContent>
       </Card>
       {children}

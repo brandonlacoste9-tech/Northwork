@@ -1,9 +1,7 @@
 import {
   REMOTE_IN_CANADA,
-  type Availability,
   type Freelancer,
   type Job,
-  type Province,
   type WorkLocation,
 } from "@/lib/data";
 
@@ -118,12 +116,12 @@ export function mapProfileToFreelancer(row: ProfileRow): Freelancer {
   return {
     id: row.id,
     name: row.display_name?.trim() || "Northernwork freelancer",
-    role: row.title?.trim() || "Freelancer",
+    role: row.title?.trim() || "",
     city: row.city?.trim() || "",
-    province: (row.province as Province) || "Ontario",
+    province: row.province?.trim() || "",
     skills: row.skills ?? [],
     hourlyRate: toNumber(row.hourly_rate_cad),
-    availability: (row.availability as Availability) || "Available this week",
+    availability: row.availability?.trim() || "",
     bio: row.bio?.trim() || "",
     sampleWork: [],
     avatarUrl: row.avatar_url,

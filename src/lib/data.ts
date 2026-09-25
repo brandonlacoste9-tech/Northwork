@@ -1,22 +1,13 @@
-export const PROVINCES = [
-  "Alberta",
-  "British Columbia",
-  "Manitoba",
-  "New Brunswick",
-  "Newfoundland and Labrador",
-  "Northwest Territories",
-  "Nova Scotia",
-  "Nunavut",
-  "Ontario",
-  "Prince Edward Island",
-  "Quebec",
-  "Saskatchewan",
-  "Yukon",
-] as const;
+import {
+  PROVINCES,
+  REMOTE_IN_CANADA,
+  canonicalProvince,
+  isRemoteInCanada,
+  provinceFromLocation,
+  type Province,
+} from "@/lib/place";
 
-export type Province = (typeof PROVINCES)[number];
-
-export const REMOTE_IN_CANADA = "Remote in Canada";
+export { PROVINCES, REMOTE_IN_CANADA, type Province };
 
 export type WorkLocation = Province | typeof REMOTE_IN_CANADA;
 
@@ -67,10 +58,10 @@ export type Freelancer = {
   name: string;
   role: string;
   city: string;
-  province: Province;
+  province: string;
   skills: string[];
   hourlyRate: number;
-  availability: Availability;
+  availability: string;
   bio: string;
   sampleWork: { title: string; summary: string }[];
   avatarUrl?: string | null;
@@ -751,7 +742,10 @@ export function filterFreelancers(
 ) {
   const needle = filters.search.trim().toLowerCase();
   return people.filter((person) => {
-    if (filters.province !== "all" && person.province !== filters.province) {
+    if (
+      filters.province !== "all" &&
+      canonicalProvince(person.province) !== filters.province
+    ) {
       return false;
     }
     if (filters.skill !== "all" && !person.skills.includes(filters.skill)) {
@@ -783,11 +777,11 @@ export function filterJobs(
   const max =
     filters.budgetMax.trim() === "" ? null : Number(filters.budgetMax);
   const filtered = jobs.filter((job) => {
-    if (filters.remoteOnly && job.location !== REMOTE_IN_CANADA) return false;
+    if (filters.remoteOnly && !isRemoteInCanada(job.location)) return false;
     if (
       !filters.remoteOnly &&
       filters.province !== "all" &&
-      job.location !== filters.province
+      provinceFromLocation(job.location) !== filters.province
     ) {
       return false;
     }

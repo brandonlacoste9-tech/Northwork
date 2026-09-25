@@ -2,14 +2,16 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { supabasePublishableKey } from "@/lib/backend";
 
-function env(name: string): string {
-  const value = process.env[name];
-  if (!value) {
+function supabaseUrl(): string {
+  // Static access (not process.env[name]) so Next.js inlines the value
+  // into client bundles at build time.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) {
     throw new Error(
-      `Missing ${name}. Copy .env.example to .env.local and fill in your Supabase project values.`
+      "Missing NEXT_PUBLIC_SUPABASE_URL. Copy .env.example to .env.local and fill in your Supabase project values."
     );
   }
-  return value;
+  return url;
 }
 
 /** Supabase client for Server Components, Server Actions, and Route Handlers. */
@@ -22,7 +24,7 @@ export async function createClient() {
     );
   }
   return createServerClient(
-    env("NEXT_PUBLIC_SUPABASE_URL"),
+    supabaseUrl(),
     key,
     {
       cookies: {

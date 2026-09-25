@@ -330,12 +330,28 @@ export async function setProposalStatus(
     .eq("job_id", jobId);
 
   if (error) throw new Error(error.message);
-  revalidatePath(`/jobs/${jobId}`);
 
   if (status === "accepted") {
+    const { error: jobError } = await supabase
+      .from("jobs")
+      .update({ status: "in_progress" })
+      .eq("id", jobId);
+    if (jobError) throw new Error(jobError.message);
+
+    const { error: declineError } = await supabase
+      .from("proposals")
+      .update({ status: "declined" })
+      .eq("job_id", jobId)
+      .eq("status", "pending");
+    if (declineError) throw new Error(declineError.message);
+
+    revalidatePath(`/jobs/${jobId}`);
+    revalidatePath("/jobs");
     const conversationId = await openConversation(jobId, proposal.freelancer_id);
     redirect(`/messages/${conversationId}`);
   }
+
+  revalidatePath(`/jobs/${jobId}`);
 }
 
 /** Leave one review on a closed project. The other party is chosen from the hire, not the form. */

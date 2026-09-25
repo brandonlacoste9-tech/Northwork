@@ -109,24 +109,43 @@ export default async function JobPage({ params }: PageProps) {
       <ProposalList jobId={id} jobStatus={jobRow.status} proposals={enriched} />
     );
   } else if (user) {
+    const { data: mine } = await supabase
+      .from("proposals")
+      .select("status")
+      .eq("job_id", id)
+      .eq("freelancer_id", user.id)
+      .maybeSingle();
     const { data: thread } = await supabase
       .from("conversations")
       .select("id")
       .eq("job_id", id)
       .eq("freelancer_id", user.id)
       .maybeSingle();
-    proposalSlot = (
-      <>
-        {thread?.id ? (
-          <p className="mt-8">
-            <Link href={`/messages/${thread.id}`} className="font-medium text-primary hover:underline">
-              Open your thread with the client
-            </Link>
+    const threadLink = thread?.id ? (
+      <p className="mt-4">
+        <Link href={`/messages/${thread.id}`} className="font-medium text-primary hover:underline">
+          Open your thread with the client
+        </Link>
+      </p>
+    ) : null;
+    if ((mine as { status: string } | null)?.status === "accepted") {
+      proposalSlot = (
+        <section className="mt-10 border-t pt-8">
+          <h2 className="font-heading text-2xl">You&apos;re hired</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            The client accepted your pitch. Keep the work in your thread.
           </p>
-        ) : null}
-        <ProposalForm jobId={id} />
-      </>
-    );
+          {threadLink}
+        </section>
+      );
+    } else {
+      proposalSlot = (
+        <>
+          {threadLink}
+          <ProposalForm jobId={id} />
+        </>
+      );
+    }
   } else {
     proposalSlot = <ProposalSignIn />;
   }

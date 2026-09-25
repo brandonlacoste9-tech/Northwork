@@ -79,16 +79,16 @@ export function ProposalList({
         <h2 className="font-heading text-2xl">
           Pitches ({proposals.length})
         </h2>
-        {jobStatus === "open" ? (
-          <form action={setJobStatus.bind(null, jobId, "closed")}>
-            <Button type="submit" variant="outline" className="h-10">
-              Close project
-            </Button>
-          </form>
-        ) : (
+        {jobStatus === "closed" ? (
           <form action={setJobStatus.bind(null, jobId, "open")}>
             <Button type="submit" variant="outline" className="h-10">
               Reopen project
+            </Button>
+          </form>
+        ) : (
+          <form action={setJobStatus.bind(null, jobId, "closed")}>
+            <Button type="submit" variant="outline" className="h-10">
+              Close project
             </Button>
           </form>
         )}

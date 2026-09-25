@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { DirectoryEmpty, DirectoryError, DirectoryLoading } from "@/components/directory-state";
 import { TalentCard } from "@/components/talent-card";
+import { useLocale, useT } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,14 +24,9 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import {
-  PROVINCES,
-  RATE_BANDS,
-  SKILLS,
-  filterFreelancers,
-  freelancers,
-  type Freelancer,
-} from "@/lib/data";
+import { PROVINCES, RATE_BANDS, filterFreelancers, freelancers, type Freelancer } from "@/lib/data";
+import type { MessageKey } from "@/lib/i18n";
+import { provinceLabel } from "@/lib/place";
 import { useDirectoryStatus } from "@/lib/use-directory-status";
 
 type Filters = {
@@ -47,7 +43,17 @@ const initialFilters: Filters = {
   rate: "any",
 };
 
+const rateKey: Record<(typeof RATE_BANDS)[number]["id"], MessageKey> = {
+  any: "talent.rateAny",
+  "under-100": "talent.rateUnder",
+  "100-140": "talent.rateMid",
+  "140-170": "talent.rateHigh",
+  "170-plus": "talent.rateTop",
+};
+
 export function TalentDirectory({ people }: { people?: Freelancer[] }) {
+  const t = useT();
+  const locale = useLocale();
   const { status, retry } = useDirectoryStatus();
   const [filters, setFilters] = useState<Filters>(initialFilters);
 
@@ -56,6 +62,13 @@ export function TalentDirectory({ people }: { people?: Freelancer[] }) {
     () => filterFreelancers(directory, filters),
     [directory, filters],
   );
+  const skills = useMemo(() => {
+    const names = new Set<string>();
+    for (const person of directory) {
+      for (const skill of person.skills) names.add(skill);
+    }
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [directory]);
 
   const activeCount = [
     filters.province !== "all",
@@ -70,33 +83,30 @@ export function TalentDirectory({ people }: { people?: Freelancer[] }) {
   const fields = (idPrefix: string) => (
     <div className="grid gap-4">
       <div className="grid gap-2">
-        <Label htmlFor={`${idPrefix}-province`}>Province</Label>
-        <Select
-          value={filters.province}
-          onValueChange={(province) => update({ province })}
-        >
+        <Label htmlFor={`${idPrefix}-province`}>{t("talent.province")}</Label>
+        <Select value={filters.province} onValueChange={(province) => update({ province })}>
           <SelectTrigger id={`${idPrefix}-province`} className="w-full">
-            <SelectValue placeholder="All provinces" />
+            <SelectValue placeholder={t("talent.allProvinces")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All provinces</SelectItem>
+            <SelectItem value="all">{t("talent.allProvinces")}</SelectItem>
             {PROVINCES.map((province) => (
               <SelectItem key={province} value={province}>
-                {province}
+                {provinceLabel(province, locale)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
       <div className="grid gap-2">
-        <Label htmlFor={`${idPrefix}-skill`}>Skill</Label>
+        <Label htmlFor={`${idPrefix}-skill`}>{t("talent.skill")}</Label>
         <Select value={filters.skill} onValueChange={(skill) => update({ skill })}>
           <SelectTrigger id={`${idPrefix}-skill`} className="w-full">
-            <SelectValue placeholder="All skills" />
+            <SelectValue placeholder={t("talent.allSkills")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All skills</SelectItem>
-            {SKILLS.map((skill) => (
+            <SelectItem value="all">{t("talent.allSkills")}</SelectItem>
+            {skills.map((skill) => (
               <SelectItem key={skill} value={skill}>
                 {skill}
               </SelectItem>
@@ -105,15 +115,15 @@ export function TalentDirectory({ people }: { people?: Freelancer[] }) {
         </Select>
       </div>
       <div className="grid gap-2">
-        <Label htmlFor={`${idPrefix}-rate`}>Hourly rate</Label>
+        <Label htmlFor={`${idPrefix}-rate`}>{t("talent.rate")}</Label>
         <Select value={filters.rate} onValueChange={(rate) => update({ rate })}>
           <SelectTrigger id={`${idPrefix}-rate`} className="w-full">
-            <SelectValue placeholder="Any rate" />
+            <SelectValue placeholder={t("talent.rateAny")} />
           </SelectTrigger>
           <SelectContent>
             {RATE_BANDS.map((band) => (
               <SelectItem key={band.id} value={band.id}>
-                {band.label}
+                {t(rateKey[band.id])}
               </SelectItem>
             ))}
           </SelectContent>
@@ -123,65 +133,60 @@ export function TalentDirectory({ people }: { people?: Freelancer[] }) {
         <Button
           type="button"
           variant="ghost"
-          className="justify-start px-0"
-          onClick={() =>
-            update({ province: "all", skill: "all", rate: "any" })
-          }
+          className="h-auto justify-start px-0 text-left whitespace-normal"
+          onClick={() => update({ province: "all", skill: "all", rate: "any" })}
         >
-          Clear province, skill, and rate
+          {t("talent.clear")}
         </Button>
       ) : null}
     </div>
   );
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 lg:grid-cols-[16rem_1fr]">
-      <aside className="hidden lg:block">
-        <h2 className="font-heading text-xl">Filters</h2>
+    <div className="mx-auto grid max-w-6xl gap-8 px-4 py-8 lg:grid-cols-[16rem_minmax(0,1fr)] lg:py-10">
+      <aside className="hidden lg:sticky lg:top-20 lg:block lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto">
+        <h2 className="font-heading text-xl">{t("talent.filters")}</h2>
         <div className="mt-4">{fields("desk")}</div>
       </aside>
-      <div>
+      <div className="min-w-0">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="grid w-full gap-2 sm:max-w-md">
-            <Label htmlFor="talent-search">Search by name or skill</Label>
+          <div className="grid w-full min-w-0 gap-2 sm:max-w-md">
+            <Label htmlFor="talent-search">{t("talent.search")}</Label>
             <Input
               id="talent-search"
               value={filters.search}
               onChange={(event) => update({ search: event.target.value })}
-              placeholder="Try Amélie, translation, iOS"
-              className="h-10"
+              placeholder={t("talent.searchPlaceholder")}
+              className="h-11"
             />
           </div>
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="outline" className="h-10 lg:hidden">
-                Filters{activeCount > 0 ? ` (${activeCount})` : ""}
+              <Button variant="outline" className="h-11 lg:hidden">
+                {t("talent.filters")}
+                {activeCount > 0 ? ` (${activeCount})` : ""}
               </Button>
             </SheetTrigger>
             <SheetContent side="left">
               <SheetHeader>
-                <SheetTitle>Filters</SheetTitle>
-                <SheetDescription>
-                  Province, skill, and CAD hourly rate.
-                </SheetDescription>
+                <SheetTitle>{t("talent.filters")}</SheetTitle>
+                <SheetDescription>{t("talent.filterHelp")}</SheetDescription>
               </SheetHeader>
-              <div className="px-4">{fields("sheet")}</div>
+              <div className="overflow-y-auto px-4 pb-4">{fields("sheet")}</div>
               <SheetFooter>
                 <SheetClose asChild>
-                  <Button className="h-10">Show results</Button>
+                  <Button className="h-11">{t("talent.show")}</Button>
                 </SheetClose>
               </SheetFooter>
             </SheetContent>
           </Sheet>
         </div>
         <div className="mt-6" aria-busy={status === "loading"}>
-          {status === "loading" ? (
-            <DirectoryLoading label="Loading talent across Canada…" />
-          ) : null}
+          {status === "loading" ? <DirectoryLoading label={t("talent.loading")} /> : null}
           {status === "error" ? (
             <DirectoryError
-              title="The talent directory didn't load"
-              body="Nothing was changed. Retry to load freelancers working in Canada."
+              title={t("talent.errorTitle")}
+              body={t("talent.errorBody")}
               onRetry={retry}
             />
           ) : null}
@@ -189,27 +194,27 @@ export function TalentDirectory({ people }: { people?: Freelancer[] }) {
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground" aria-live="polite">
                 {results.length === 1
-                  ? "1 freelancer"
-                  : `${results.length} freelancers`}
+                  ? t("talent.countOne")
+                  : t("talent.count", { count: results.length })}
               </p>
               {results.length === 0 ? (
                 directory.length === 0 ? (
                   <DirectoryEmpty
-                    title="No freelancers published yet"
-                    body="A profile needs a Canadian city, a province, and an hourly rate in CAD."
-                    action={{ href: "/profile", label: "Publish your profile" }}
+                    title={t("talent.emptyTitle")}
+                    body={t("talent.emptyBody")}
+                    action={{ href: "/profile", label: t("talent.publish") }}
                   />
                 ) : (
                   <DirectoryEmpty
-                    title="No one matches those filters"
-                    body="Try another province, skill, or rate. Northernwork only lists people working in Canada."
+                    title={t("talent.noMatchTitle")}
+                    body={t("talent.noMatchBody")}
                     onClear={() => setFilters(initialFilters)}
                   />
                 )
               ) : (
                 <ul className="grid gap-4 sm:grid-cols-2">
                   {results.map((person) => (
-                    <li key={person.id}>
+                    <li key={person.id} className="min-w-0">
                       <TalentCard person={person} />
                     </li>
                   ))}

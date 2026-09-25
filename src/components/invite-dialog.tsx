@@ -88,7 +88,7 @@ export function InviteDialog({
 
   if (configured && !signedIn) {
     return (
-      <Button asChild className="h-11 px-4">
+      <Button asChild className="h-11 w-full px-4 sm:w-auto">
         <Link href={`/login?next=/talent/${freelancerId ?? ""}`}>{t("invite.signIn")}</Link>
       </Button>
     );
@@ -97,7 +97,7 @@ export function InviteDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button className="h-11 px-4">{t("invite.button", { name: first })}</Button>
+        <Button className="h-11 w-full px-4 sm:w-auto">{t("invite.button", { name: first })}</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         {sent ? (

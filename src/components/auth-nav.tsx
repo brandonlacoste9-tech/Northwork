@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
  * Server-rendered auth area for the site header. Renders nothing while the
  * app runs the zero-config sample-data preview.
  */
-export async function AuthNav() {
+export async function AuthNav({ stacked = false }: { stacked?: boolean }) {
   if (!isSupabaseConfigured()) return null;
   const locale = await getLocale();
   const t = (key: Parameters<typeof translate>[1]) => translate(locale, key);
@@ -23,10 +23,10 @@ export async function AuthNav() {
   if (!user) {
     return (
       <>
-        <Button asChild variant="ghost" className="h-10 px-4">
+        <Button asChild variant="ghost" className={stacked ? "h-11 w-full justify-start px-3" : "h-10 px-3"}>
           <Link href="/login">{t("nav.login")}</Link>
         </Button>
-        <Button asChild variant="outline" className="h-10 px-4">
+        <Button asChild variant="outline" className={stacked ? "h-11 w-full justify-start px-3" : "h-10 px-3"}>
           <Link href="/signup">{t("nav.signup")}</Link>
         </Button>
       </>
@@ -45,7 +45,11 @@ export async function AuthNav() {
     <>
       <Link
         href="/notifications"
-        className="text-sm font-medium text-foreground/80 hover:text-foreground"
+        className={
+          stacked
+            ? "rounded-lg px-3 py-3 text-base font-medium hover:bg-muted"
+            : "text-sm font-medium text-foreground/80 hover:text-foreground"
+        }
       >
         {t("nav.alerts")}
         {(count ?? 0) > 0 ? (
@@ -56,7 +60,11 @@ export async function AuthNav() {
       </Link>
       <Link
         href="/messages"
-        className="text-sm font-medium text-foreground/80 hover:text-foreground"
+        className={
+          stacked
+            ? "rounded-lg px-3 py-3 text-base font-medium hover:bg-muted"
+            : "text-sm font-medium text-foreground/80 hover:text-foreground"
+        }
       >
         {t("nav.inbox")}
         {unread > 0 ? (
@@ -67,12 +75,16 @@ export async function AuthNav() {
       </Link>
       <Link
         href="/profile"
-        className="text-sm font-medium text-foreground/80 hover:text-foreground"
+        className={
+          stacked
+            ? "rounded-lg px-3 py-3 text-base font-medium hover:bg-muted"
+            : "text-sm font-medium text-foreground/80 hover:text-foreground"
+        }
       >
         {t("nav.profile")}
       </Link>
-      <form action={signOut}>
-        <Button type="submit" variant="ghost" className="h-10 px-4">
+      <form action={signOut} className={stacked ? "w-full" : undefined}>
+        <Button type="submit" variant="ghost" className={stacked ? "h-11 w-full justify-start px-3" : "h-10 px-3"}>
           {t("nav.signout")}
         </Button>
       </form>

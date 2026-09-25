@@ -1,9 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { DirectoryEmpty } from "@/components/directory-state";
 import { InviteDialog, type InviteJob } from "@/components/invite-dialog";
 import { PersonAvatar } from "@/components/person-avatar";
 import { TrustBadge } from "@/components/trust-badge";
+import { useLocale, useT } from "@/components/locale-provider";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -13,7 +16,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Freelancer } from "@/lib/data";
-import { formatHourly, memberSinceLabel } from "@/lib/format";
+import { availabilityLabel, formatHourly, memberSinceLabel } from "@/lib/format";
+import { formatPersonPlace } from "@/lib/place";
 import { StarRow } from "@/components/review-form";
 
 export type ProfileReview = {
@@ -38,46 +42,58 @@ export function FreelancerProfile({
     jobs: InviteJob[];
   };
 }) {
+  const t = useT();
+  const locale = useLocale();
+  const place = formatPersonPlace(person.city, person.province, locale);
+  const since = memberSinceLabel(person.memberSince, locale);
   return (
-    <article className="mx-auto max-w-3xl px-4 py-10">
+    <article className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
       <Link
         href="/talent"
         className="text-sm font-medium text-primary hover:underline"
       >
-        Back to talent
+        {t("talent.back")}
       </Link>
       <header className="mt-6 flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex gap-4">
+        <div className="flex min-w-0 gap-4">
           <PersonAvatar
             name={person.name}
             src={person.avatarUrl}
             className="size-16 text-lg"
           />
-          <div>
-            <h1 className="font-heading text-3xl tracking-tight sm:text-4xl">
+          <div className="min-w-0">
+            <h1 className="font-heading text-3xl tracking-tight text-balance sm:text-4xl">
               {person.name}
             </h1>
-            <p className="mt-1 text-lg">{person.role}</p>
-            <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
-              <MapPin className="size-3.5" aria-hidden="true" />
-              {person.city}, {person.province}
-            </p>
+            {person.role ? <p className="mt-1 text-lg">{person.role}</p> : null}
+            {place ? (
+              <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
+                <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
+                {place}
+              </p>
+            ) : null}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {person.verified ? <TrustBadge kind="verified" /> : null}
-              <Badge variant="outline">{person.availability}</Badge>
+              {person.availability ? (
+                <Badge variant="outline">{availabilityLabel(person.availability, locale)}</Badge>
+              ) : null}
               {person.completedCount ? (
                 <Badge variant="outline">
-                  {person.completedCount} completed
+                  {t("profile.completed", { count: person.completedCount })}
                 </Badge>
               ) : null}
               {(person.reviewCount ?? 0) >= 2 && (person.rating ?? 0) >= 4.5 ? (
-                <Badge variant="outline">Highly rated</Badge>
+                <Badge variant="outline">{t("profile.highlyRated")}</Badge>
               ) : null}
             </div>
           </div>
         </div>
-        <div className="flex flex-col items-start gap-3 sm:items-end">
-          <p className="font-heading text-3xl">{formatHourly(person.hourlyRate)}</p>
+        <div className="flex w-full flex-col items-start gap-3 sm:w-auto sm:items-end">
+          {person.hourlyRate > 0 ? (
+            <p className="font-heading text-3xl tabular-nums">
+              {formatHourly(person.hourlyRate, locale)}
+            </p>
+          ) : null}
           {person.reviewCount ? (
             <p className="flex items-center gap-2 text-sm">
               <StarRow rating={person.rating ?? 0} />
@@ -86,48 +102,52 @@ export function FreelancerProfile({
               </span>
             </p>
           ) : null}
-          {memberSinceLabel(person.memberSince) ? (
-            <p className="text-sm text-muted-foreground">
-              {memberSinceLabel(person.memberSince)}
-            </p>
+          {since ? (
+            <p className="text-sm text-muted-foreground">{since}</p>
           ) : null}
           {person.sample || invite?.self ? null : (
-            <InviteDialog
-              freelancerId={person.id}
-              freelancerName={person.name}
-              configured={invite?.configured ?? false}
-              signedIn={invite?.signedIn ?? false}
-              jobs={invite?.jobs ?? []}
-            />
+            <div className="w-full sm:w-auto">
+              <InviteDialog
+                freelancerId={person.id}
+                freelancerName={person.name}
+                configured={invite?.configured ?? false}
+                signedIn={invite?.signedIn ?? false}
+                jobs={invite?.jobs ?? []}
+              />
+            </div>
           )}
         </div>
       </header>
-      <section className="mt-10">
-        <h2 className="font-heading text-2xl">About</h2>
-        <p className="mt-3 max-w-2xl text-base leading-7 text-foreground/90">
-          {person.bio}
-        </p>
-      </section>
-      <section className="mt-10">
-        <h2 className="font-heading text-2xl">Skills</h2>
-        <ul className="mt-3 flex flex-wrap gap-2">
-          {person.skills.map((skill) => (
-            <li key={skill}>
-              <Badge variant="secondary">{skill}</Badge>
-            </li>
-          ))}
-        </ul>
-      </section>
+      {person.bio ? (
+        <section className="mt-10">
+          <h2 className="font-heading text-2xl">{t("profile.about")}</h2>
+          <p className="mt-3 max-w-2xl text-base leading-7 text-foreground/90">
+            {person.bio}
+          </p>
+        </section>
+      ) : null}
+      {person.skills.length > 0 ? (
+        <section className="mt-10">
+          <h2 className="font-heading text-2xl">{t("profile.skills")}</h2>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {person.skills.map((skill) => (
+              <li key={skill}>
+                <Badge variant="secondary">{skill}</Badge>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       <WorkSection person={person} />
       {reviews ? (
         <section className="mt-10">
-          <h2 className="font-heading text-2xl">Reviews</h2>
+          <h2 className="font-heading text-2xl">{t("profile.reviews")}</h2>
           {reviews.length === 0 ? (
             <div className="mt-4">
               <DirectoryEmpty
-                title="No reviews yet"
-                body="Reviews open after a project is closed, one from the client and one from the freelancer."
-                action={{ href: "/jobs", label: "Browse open projects" }}
+                title={t("profile.noReviews")}
+                body={t("profile.noReviewsBody")}
+                action={{ href: "/jobs", label: t("profile.browseJobs") }}
               />
             </div>
           ) : (
@@ -136,7 +156,10 @@ export function FreelancerProfile({
                 {(
                   reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
                 ).toFixed(1)}{" "}
-                · {reviews.length} review{reviews.length === 1 ? "" : "s"}
+                ·{" "}
+                {reviews.length === 1
+                  ? t("profile.reviewOne", { count: reviews.length })
+                  : t("profile.reviewsMany", { count: reviews.length })}
               </p>
               <ul className="mt-4 grid gap-3">
                 {reviews.map((review) => (
@@ -148,11 +171,14 @@ export function FreelancerProfile({
                           <StarRow rating={review.rating} />
                         </CardTitle>
                         <CardDescription>
-                          {new Date(review.createdAt).toLocaleDateString("en-CA", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                          })}
+                          {new Date(review.createdAt).toLocaleDateString(
+                            locale === "fr" ? "fr-CA" : "en-CA",
+                            {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            },
+                          )}
                         </CardDescription>
                       </CardHeader>
                       {review.comment ? (
@@ -173,6 +199,7 @@ export function FreelancerProfile({
 }
 
 function WorkSection({ person }: { person: Freelancer }) {
+  const t = useT();
   const pieces =
     person.portfolio && person.portfolio.length > 0
       ? person.portfolio
@@ -186,7 +213,7 @@ function WorkSection({ person }: { person: Freelancer }) {
   if (pieces.length === 0) return null;
   return (
     <section className="mt-10">
-      <h2 className="font-heading text-2xl">Work</h2>
+      <h2 className="font-heading text-2xl">{t("profile.work")}</h2>
       <ul className="mt-4 grid gap-3 sm:grid-cols-2">
         {pieces.map((work) => (
           <li key={work.id}>

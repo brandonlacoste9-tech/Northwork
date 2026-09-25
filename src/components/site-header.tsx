@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import { LanguageSwitch } from "@/components/language-switch";
 import { Logo } from "@/components/logo";
@@ -14,26 +15,43 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { cn } from "cn";
 
-export function SiteHeader({ authNav }: { authNav?: React.ReactNode }) {
+export function SiteHeader({
+  desktopAuth,
+  mobileAuth,
+}: {
+  desktopAuth?: React.ReactNode;
+  mobileAuth?: React.ReactNode;
+}) {
   const t = useT();
+  const pathname = usePathname();
   const links = [
     { href: "/talent", label: t("nav.talent") },
     { href: "/jobs", label: t("nav.jobs") },
     { href: "/messages", label: t("nav.messages") },
   ];
+
+  function current(href: string) {
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
+
   return (
     <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
-        <Link href="/" aria-label="Northernwork home">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
+        <Link href="/" aria-label={t("nav.home")} className="min-w-0">
           <Logo />
         </Link>
-        <nav className="hidden items-center gap-6 md:flex" aria-label="Primary">
+        <nav className="hidden items-center gap-4 lg:flex" aria-label="Primary">
           {links.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="text-sm font-medium text-foreground/80 hover:text-foreground"
+              aria-current={current(link.href) ? "page" : undefined}
+              className={cn(
+                "text-sm font-medium hover:text-foreground",
+                current(link.href) ? "text-foreground" : "text-foreground/80",
+              )}
             >
               {link.label}
             </Link>
@@ -42,14 +60,14 @@ export function SiteHeader({ authNav }: { authNav?: React.ReactNode }) {
             <Link href="/post">{t("nav.post")}</Link>
           </Button>
           <LanguageSwitch />
-          {authNav}
+          {desktopAuth}
         </nav>
         <Sheet>
           <SheetTrigger asChild>
             <Button
               variant="outline"
               size="icon"
-              className="md:hidden"
+              className="shrink-0 lg:hidden"
               aria-label={t("nav.menu")}
             >
               <Menu />
@@ -64,23 +82,25 @@ export function SiteHeader({ authNav }: { authNav?: React.ReactNode }) {
                 <SheetClose asChild key={link.href}>
                   <Link
                     href={link.href}
-                    className="rounded-lg px-3 py-3 text-base font-medium hover:bg-muted"
+                    aria-current={current(link.href) ? "page" : undefined}
+                    className={cn(
+                      "rounded-lg px-3 py-3 text-base font-medium hover:bg-muted",
+                      current(link.href) && "bg-muted",
+                    )}
                   >
                     {link.label}
                   </Link>
                 </SheetClose>
               ))}
               <SheetClose asChild>
-                <Button asChild className="mt-3 h-11">
+                <Button asChild className="mt-3 h-12">
                   <Link href="/post">{t("nav.post")}</Link>
                 </Button>
               </SheetClose>
-              <div className="px-3 py-2">
+              <div className="px-3 py-3">
                 <LanguageSwitch />
               </div>
-              {authNav ? (
-                <div className="mt-3 flex flex-col gap-1 px-3">{authNav}</div>
-              ) : null}
+              {mobileAuth ? <div className="mt-1 flex flex-col gap-2 px-3">{mobileAuth}</div> : null}
             </nav>
           </SheetContent>
         </Sheet>

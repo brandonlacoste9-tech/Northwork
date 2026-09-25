@@ -25,7 +25,6 @@ export default async function HomePage() {
   const liveJobs = await loadOpenJobs();
   const people = livePeople ?? freelancers;
   const jobs = liveJobs ?? seedJobs;
-  const samplesOnly = people.length > 0 && people.every((person) => person.sample);
   const featuredPeople = people.slice(0, 3);
   const featuredJobs = jobs.slice(0, 3);
   const clientSteps = [1, 2, 3].map((n) => ({
@@ -62,7 +61,7 @@ export default async function HomePage() {
           <aside className="rounded-2xl bg-primary p-6 text-primary-foreground sm:p-8">
             <Image
               src="/northernwork-logo.jpg"
-              alt="Northernwork logo: a pine, a north star, and a compass needle"
+              alt={t("home.logoAlt")}
               width={512}
               height={512}
               className="mx-auto aspect-square w-full max-w-xs rounded-xl"
@@ -129,9 +128,6 @@ export default async function HomePage() {
             <div>
               <h2 className="font-heading text-3xl tracking-tight">{t("home.peopleTitle")}</h2>
               <p className="mt-2 max-w-xl text-muted-foreground">{t("home.peopleBody")}</p>
-              {samplesOnly ? (
-                <p className="mt-2 max-w-xl text-sm text-muted-foreground">{t("home.sampleBanner")}</p>
-              ) : null}
             </div>
             <Button asChild variant="outline" className="h-10">
               <Link href="/talent">{t("home.allTalent")}</Link>
@@ -139,7 +135,7 @@ export default async function HomePage() {
           </div>
           <ul className="mt-8 grid gap-4 md:grid-cols-3">
             {featuredPeople.map((person) => (
-              <li key={person.id}>
+              <li key={person.id} className="min-w-0">
                 <TalentCard person={person} />
               </li>
             ))}

@@ -48,7 +48,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col">
         <LocaleProvider locale={locale}>
           <MarketplaceProvider>
-            <SiteHeader authNav={<AuthNav />} />
+            <SiteHeader desktopAuth={<AuthNav />} mobileAuth={<AuthNav stacked />} />
             <div className="flex-1">{children}</div>
             <SiteFooter />
           </MarketplaceProvider>

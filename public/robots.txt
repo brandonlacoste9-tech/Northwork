@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /messages/
+Disallow: /notifications/
+Disallow: /settings/
+
+Sitemap: https://northernwork.ca/sitemap.xml

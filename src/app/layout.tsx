@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Source_Sans_3 } from "next/font/google";
 import { AuthNav } from "@/components/auth-nav";
+import { AiAssistant } from "@/components/ai-assistant";
 import { LocaleProvider } from "@/components/locale-provider";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -66,6 +67,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             <SiteHeader desktopAuth={<AuthNav />} mobileAuth={<AuthNav stacked />} />
             <div className="flex-1">{children}</div>
             <SiteFooter />
+            <AiAssistant locale={locale} />
           </MarketplaceProvider>
         </LocaleProvider>
       </body>

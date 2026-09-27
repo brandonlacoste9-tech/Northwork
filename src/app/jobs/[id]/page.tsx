@@ -159,9 +159,9 @@ export default async function JobPage({ params, searchParams }: PageProps) {
     } else if (mine) {
       proposalSlot = (
         <section id="pitch" className="mt-10 border-t pt-8">
-          <h2 className="font-heading text-2xl">Pitch sent</h2>
+          <h2 className="font-heading text-2xl">You applied for this job</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            You already sent a pitch on this project. One pitch per project.
+            Your pitch is with the client now. One application per project.
           </p>
           {threadLink}
         </section>

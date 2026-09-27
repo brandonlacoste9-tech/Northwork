@@ -52,7 +52,15 @@ export async function ProposalForm({
       {pro ? (
         <p className="mt-2 text-sm font-medium">{t("pitch.proIncluded")}</p>
       ) : pitchesLeft != null ? (
-        <p className="mt-2 text-sm font-medium">{t("pitch.left", { count: pitchesLeft })}</p>
+        <>
+          <p className="mt-2 text-sm font-medium">{t("pitch.left", { count: pitchesLeft })}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("pitch.freeNote")}{" "}
+            <Link href="/pricing" className="underline underline-offset-2">
+              {t("nav.pricing")}
+            </Link>
+          </p>
+        </>
       ) : null}
       <p className="mt-2 text-sm text-muted-foreground">
         {proposalCount === 0

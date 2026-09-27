@@ -257,6 +257,7 @@ const en = {
   "privacy.title": "Privacy",
   "pitch.left": "{{count}} pitches left this month",
   "pitch.proIncluded": "Pro · pitches included",
+  "pitch.freeNote": "Free plan includes 8 pitches a month, reset on the 1st.",
   "pitch.signInEmpty":
     "No pitches yet — be the first to pitch this project. You need an account to send one.",
   "pitch.signInBody": "You need an account to pitch on this project.",
@@ -564,6 +565,7 @@ const fr: Record<keyof typeof en, string> = {
   "privacy.title": "Confidentialité",
   "pitch.left": "{{count}} offres restantes ce mois-ci",
   "pitch.proIncluded": "Pro · offres incluses",
+  "pitch.freeNote": "Le forfait gratuit comprend 8 offres par mois, remises à zéro le 1er.",
   "pitch.signInEmpty":
     "Aucune offre pour l'instant — soyez la première personne à proposer. Vous devez avoir un compte pour envoyer une offre.",
   "pitch.signInBody": "Vous devez avoir un compte pour envoyer une offre.",

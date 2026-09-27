@@ -6,8 +6,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const MODEL_URL = "https://api.deepseek.com/chat/completions";
-const MODEL = "deepseek-chat";
+const MODEL_URL = "https://api.x.ai/v1/chat/completions";
+const MODEL = "grok-4.20-non-reasoning";
 
 // Simple in-memory throttle: 30 questions per IP per hour.
 const hits = new Map<string, number[]>();
@@ -23,7 +23,7 @@ function throttled(ip: string): boolean {
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
 export async function POST(req: Request) {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
       {

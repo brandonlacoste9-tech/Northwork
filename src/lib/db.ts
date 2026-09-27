@@ -10,7 +10,7 @@ export function getDb() {
   const url = process.env.DATABASE_URL;
   if (!url) {
     throw new Error(
-      "DATABASE_URL is not set, so escrow status cannot be saved."
+      "The database connection is not configured. Please try again in a moment."
     );
   }
   if (!sql) sql = postgres(url, { ssl: "require", max: 1 });
